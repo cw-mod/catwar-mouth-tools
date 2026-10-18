@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, крестики
 // @namespace    catwar-mouth-tools
-// @version      1.3.0
+// @version      1.3.1
 // @description  Сортировка предметов во рту, закреплённое плавающее окно с «рецептом» из нескольких предметов и красный крестик на предметах, отмеченных как неактуальные.
 // @author       local
 // @match        https://catwar.su/cw3
@@ -52,15 +52,18 @@
 
   css([
     // крестик и рамки на предметах во рту; только data-* + CSS,
-    // классы/стили .itemInMouth Vue перезаписывает (см. pitfalls)
+    // классы/стили .itemInMouth Vue перезаписывает (см. pitfalls).
+    // крестик — чистым CSS (градиенты), без шрифтовых символов:
+    // две перекрещённые полосы + лёгкая красная заливка, видно всегда
     '#itemList .itemInMouth { position: relative; }',
+    '#itemList .itemInMouth[data-cwb-stale] { background: rgba(224, 34, 77, .18); border-radius: 4px; }',
     '#itemList .itemInMouth[data-cwb-stale]::after {',
-    '  content: "\\2716";',
-    '  position: absolute; inset: 0;',
-    '  display: flex; align-items: center; justify-content: center;',
-    '  color: #e0224d; font: 900 40px/1 sans-serif;',
-    '  text-shadow: 0 1px 3px rgba(255,255,255,.9), 0 0 5px rgba(0,0,0,.55);',
-    '  opacity: .85; pointer-events: none; z-index: 2;',
+    '  content: "";',
+    '  position: absolute; left: 0; top: 0; right: 0; bottom: 0;',
+    '  background:',
+    '    linear-gradient(to top right, transparent 46.5%, #e0224d 46.5%, #e0224d 53.5%, transparent 53.5%),',
+    '    linear-gradient(to bottom right, transparent 46.5%, #e0224d 46.5%, #e0224d 53.5%, transparent 53.5%);',
+    '  opacity: .9; pointer-events: none; z-index: 2;',
     '}',
     '#itemList .itemInMouth[data-cwb-recipe] { outline: 2px solid #2f9e51; outline-offset: -1px; border-radius: 4px; }',
 
@@ -309,7 +312,7 @@
       '      <option value="game">как у игры</option>' +
       '      <option value="type">по типу</option>' +
       '    </select>' +
-      '    <label class="cwb-mt-lbl cwb-mt-hold"><input type="checkbox" data-role="hold"/> держать</label>' +
+      '    <label class="cwb-mt-lbl cwb-mt-hold" title="Пересортировывать предметы автоматически, когда игра добавляет новый (сервер вставляет его по своему правилу) — выбранный порядок сохраняется"><input type="checkbox" data-role="hold"/> держать порядок</label>' +
       '  </div>' +
       '  <div class="cwb-mt-row cwb-mt-btnrow">' +
       '    <button type="button" class="cwb-mt-btn" data-act="clear-recipe">Очистить рецепт</button>' +
