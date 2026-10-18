@@ -10,9 +10,9 @@ Userscript for `/cw3` (catwar.su / catwar.net):
    row of game-sized icons with a `have/need` badge on each (crossed-out
    items don't count), turns green when collected; items matching the
    recipe get a green outline in the mouth.
-3. **Stale crosses** — `Ctrl`/`⌘`+click marks a whole item type as irrelevant:
-   red ✖ overlay via `data-cwb-*` + CSS pseudo-element (survives Vue
-   re-renders).
+3. **Stale crosses** — `Ctrl`/`⌘`+click draws a red ✖ on that **exact item
+  instance** in the mouth (per-item id, not per type); overlay via
+  `data-cwb-*` + CSS pseudo-element (survives Vue re-renders).
 
 Everything is client-side (no socket emits), state in `localStorage`
 key `cwb_mouth_tools`. Plain clicks keep the vanilla game item menu.
@@ -29,8 +29,9 @@ https://cw-mod.github.io/catwar-mouth-tools/
 
 ## Notes
 
-- Marks are per item **type** (persist after consumption; e.g. old ropes of
-  that kind stay crossed). Panel button «Снять крестики» clears all.
+- Crosses are per item **instance**: they disappear when the item is
+  consumed/dropped (id is gone). Panel button «Снять крестики» clears all.
+  Crossed-out instances don't count toward recipe progress.
 - Verified against the Oct 19 2026 bundle: mouth state is `vm.item.list`
   (`{id, type, isLocked, expiresAt…}`), server re-sorts by
   `["lastPick","id"]` inside `thing add` only. See

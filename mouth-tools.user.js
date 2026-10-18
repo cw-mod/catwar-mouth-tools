@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, крестики
 // @namespace    catwar-mouth-tools
-// @version      1.2.1
+// @version      1.3.0
 // @description  Сортировка предметов во рту, закреплённое плавающее окно с «рецептом» из нескольких предметов и красный крестик на предметах, отмеченных как неактуальные.
 // @author       local
 // @match        https://catwar.su/cw3
@@ -38,10 +38,10 @@
         sortMode: parsed.sortMode || 'game',   // game | type | fresh | lock | id
         holdOrder: parsed.holdOrder !== false, // сохранять порядок при новых предметах
         recipe: Array.isArray(parsed.recipe) ? parsed.recipe : [], // [{type, cnt}]
-        stale: parsed.stale || {}              // {type: true}
+        staleIds: parsed.staleIds || {}        // {itemId: true} — крестик на конкретном экземпляре
       };
     } catch (e) {
-      return { pos: null, size: null, collapsed: false, sortMode: 'game', holdOrder: true, recipe: [], stale: {} };
+      return { pos: null, size: null, collapsed: false, sortMode: 'game', holdOrder: true, recipe: [], staleIds: {} };
     }
   }
   function save() {
@@ -197,7 +197,8 @@
         t = m ? m[1] : null;
       }
       setAttr(el, 'cwb-type', t != null ? t : null);
-      setAttr(el, 'cwb-stale', (t != null && st.stale[t]) ? '1' : null);
+      // крестик — на конкретном экземпляре, по id предмета
+      setAttr(el, 'cwb-stale', (el.id && st.staleIds[el.id]) ? '1' : null);
       setAttr(el, 'cwb-recipe', (t != null && recipeFind(t)) ? '1' : null);
     });
 
@@ -215,7 +216,8 @@
     if (!vm || !vm.item) return have;
     vm.item.list.forEach(function (i) {
       var t = itemType(i);
-      if (t == null || st.stale[t]) return; // крестики не считаем собранными
+      if (t == null) return;
+      if (i.id != null && st.staleIds[i.id]) return; // перечёркнутые экземпляры не считаем
       have[t] = (have[t] || 0) + 1;
     });
     return have;
@@ -230,7 +232,8 @@
 
   // --------------------------------------------------------------- interactions
 
-  // модификаторы: Alt+клик — добавить/убрать из рецепта, Ctrl/⌘+клик — крестик.
+  // модификаторы: Alt+клик — добавить/убрать из рецепта (по типу),
+  // Ctrl/⌘+клик — крестик на самом предмете (по экземпляру).
   // Обычный клик не трогаем: у игры свой @click="item.showActions(now)".
   document.addEventListener('click', function (e) {
     if (!e.altKey && !e.ctrlKey && !e.metaKey) return;
@@ -239,12 +242,13 @@
     e.preventDefault();
     e.stopPropagation();
 
-    var type = el.getAttribute(PREFIX + 'type');
-    if (type == null) type = itemTypeById(el.id);
-    if (type == null) return;
-
-    if (e.altKey) toggleRecipe(type);
-    else toggleStale(type);
+    if (e.altKey) {
+      var type = el.getAttribute(PREFIX + 'type');
+      if (type == null) type = itemTypeById(el.id);
+      if (type != null) toggleRecipe(type);
+    } else if (el.id) {
+      toggleStale(String(el.id));
+    }
   }, true);
 
   function itemTypeById(id) {
@@ -263,9 +267,9 @@
     save();
     mark();
   }
-  function toggleStale(type) {
-    if (st.stale[type]) delete st.stale[type];
-    else st.stale[type] = true;
+  function toggleStale(id) {
+    if (st.staleIds[id]) delete st.staleIds[id];
+    else st.staleIds[id] = true;
     save();
     mark();
   }
@@ -298,7 +302,7 @@
       '<div class="cwb-mt-body">' +
       '  <div class="cwb-mt-recipe" data-role="recipe"></div>' +
       '  <div class="cwb-mt-row cwb-mt-hint">Alt+клик по предмету во рту — ± в рецепт</div>' +
-      '  <div class="cwb-mt-row cwb-mt-hint">Ctrl(⌘)+клик — отметить/снять крестик</div>' +
+      '  <div class="cwb-mt-row cwb-mt-hint">Ctrl(⌘)+клик по предмету — крестик на нём</div>' +
       '  <div class="cwb-mt-row">' +
       '    <label class="cwb-mt-lbl">Сортировка</label>' +
       '    <select class="cwb-mt-sort" data-role="sortmode">' +
@@ -355,7 +359,7 @@
         save();
         mark();
       } else if (act === 'clear-stale') {
-        st.stale = {};
+        st.staleIds = {};
         save();
         mark();
       }
