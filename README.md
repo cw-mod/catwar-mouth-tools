@@ -2,17 +2,19 @@
 
 Userscript for `/cw3` (catwar.su / catwar.net):
 
-1. **Sort mouth items** — game order or by type; optional «держать» keeps the
-   chosen order after the game re-sorts (`lastPick`) on every new item.
+1. **Sort mouth items** — game order or by type; the chosen order is always
+   re-applied after the game re-sorts (`lastPick`) on every new item.
 2. **Pinned «recipe» window** — floating panel (outside `#app`, like
    `#chat_float`), resizable by dragging the bottom-right corner:
-   `Alt`+click a mouth item to add/remove it from the recipe; recipe is a
-   row of game-sized icons with a `have/need` badge on each (crossed-out
-   items don't count), turns green when collected; items matching the
-   recipe get a green outline in the mouth.
-3. **Stale crosses** — `Ctrl`/`⌘`+click draws a red ✖ on that **exact item
-  instance** in the mouth (per-item id, not per type); overlay via
-  `data-cwb-*` + CSS pseudo-element (survives Vue re-renders).
+   `Alt`+click a mouth item to add/remove that item kind from the recipe;
+   the recipe is a row of game-sized icons (one of each kind, no counters) —
+   missing kinds are dimmed, present ones get a green outline, and the whole
+   panel glows green when the recipe can be assembled from the mouth
+   (crossed-out instances don't count).
+3. **Stale crosses** — `Ctrl`/`⌘`+click draws a big red SVG cross over that
+  **exact item instance** in the mouth (per-item id, not per type) plus a
+  light red tint; overlay via `data-cwb-*` + CSS pseudo-element (survives
+  Vue re-renders).
 
 Everything is client-side (no socket emits), state in `localStorage`
 key `cwb_mouth_tools`. Plain clicks keep the vanilla game item menu.

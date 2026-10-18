@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, крестики
 // @namespace    catwar-mouth-tools
-// @version      1.3.1
+// @version      1.4.0
 // @description  Сортировка предметов во рту, закреплённое плавающее окно с «рецептом» из нескольких предметов и красный крестик на предметах, отмеченных как неактуальные.
 // @author       local
 // @match        https://catwar.su/cw3
@@ -31,17 +31,22 @@
   function load() {
     try {
       var parsed = JSON.parse(localStorage.getItem(LS_KEY)) || {};
+      // рецепт — просто список типов, по одной штуке каждого;
+      // старый формат [{type,cnt}] нормализуем в типы
+      var recipe = Array.isArray(parsed.recipe)
+        ? parsed.recipe.map(function (r) { return typeof r === 'object' ? r.type : r; })
+            .filter(function (t) { return t != null; })
+        : [];
       return {
         pos: typeof parsed.pos === 'object' && parsed.pos ? parsed.pos : null,
         size: parsed.size && typeof parsed.size.w === 'number' ? parsed.size : null,
         collapsed: !!parsed.collapsed,
-        sortMode: parsed.sortMode || 'game',   // game | type | fresh | lock | id
-        holdOrder: parsed.holdOrder !== false, // сохранять порядок при новых предметах
-        recipe: Array.isArray(parsed.recipe) ? parsed.recipe : [], // [{type, cnt}]
+        sortMode: parsed.sortMode || 'game',   // game | type (порядок держится всегда)
+        recipe: recipe,
         staleIds: parsed.staleIds || {}        // {itemId: true} — крестик на конкретном экземпляре
       };
     } catch (e) {
-      return { pos: null, size: null, collapsed: false, sortMode: 'game', holdOrder: true, recipe: [], staleIds: {} };
+      return { pos: null, size: null, collapsed: false, sortMode: 'game', recipe: [], staleIds: {} };
     }
   }
   function save() {
@@ -53,17 +58,14 @@
   css([
     // крестик и рамки на предметах во рту; только data-* + CSS,
     // классы/стили .itemInMouth Vue перезаписывает (см. pitfalls).
-    // крестик — чистым CSS (градиенты), без шрифтовых символов:
-    // две перекрещённые полосы + лёгкая красная заливка, видно всегда
+    // крестик — большой SVG поверх картинки предмета (data-URI в ::after)
     '#itemList .itemInMouth { position: relative; }',
-    '#itemList .itemInMouth[data-cwb-stale] { background: rgba(224, 34, 77, .18); border-radius: 4px; }',
-    '#itemList .itemInMouth[data-cwb-stale]::after {',
-    '  content: "";',
-    '  position: absolute; left: 0; top: 0; right: 0; bottom: 0;',
-    '  background:',
-    '    linear-gradient(to top right, transparent 46.5%, #e0224d 46.5%, #e0224d 53.5%, transparent 53.5%),',
-    '    linear-gradient(to bottom right, transparent 46.5%, #e0224d 46.5%, #e0224d 53.5%, transparent 53.5%);',
-    '  opacity: .9; pointer-events: none; z-index: 2;',
+    '#itemList .itemInMouth[data-cwb-stale] { background: rgba(224, 34, 77, .14); border-radius: 4px; }',
+    '#itemList .itemInMouth[data-cwb-stale]::after {' +
+    '  content: "";' +
+    '  position: absolute; left: 0; top: 0; right: 0; bottom: 0;' +
+    "  background: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M16 16 L84 84 M84 16 L16 84' stroke='%23e0224d' stroke-width='17' stroke-linecap='round'/%3E%3C/svg%3E\") center / 100% 100% no-repeat;" +
+    '  opacity: .92; pointer-events: none; z-index: 2;' +
     '}',
     '#itemList .itemInMouth[data-cwb-recipe] { outline: 2px solid #2f9e51; outline-offset: -1px; border-radius: 4px; }',
 
@@ -94,7 +96,6 @@
     '.cwb-mt-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }',
     '.cwb-mt-hint { font-size: 10px; opacity: .6; }',
     '.cwb-mt-lbl { opacity: .75; }',
-    '.cwb-mt-hold { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; }',
     '.cwb-mt-sort, .cwb-mt-btn { font: inherit; border-radius: 6px; }',
     '.cwb-mt-sort { background: rgba(255,255,255,.12); color: inherit; border: 1px solid rgba(255,255,255,.25); padding: 2px 6px; }',
     '.cwb-mt-btn { cursor: pointer; border: 0; background: rgba(255,255,255,.12); color: inherit; padding: 3px 8px; }',
@@ -110,10 +111,8 @@
     '.cwb-mt-item { position: relative; cursor: pointer; line-height: 0; border-radius: 6px; }',
     '.cwb-mt-item img { display: block; }', // натуральный размер, как в игре (#itemList img без width)
     '.cwb-mt-item:hover img { outline: 2px solid rgba(255,255,255,.6); outline-offset: -1px; }',
-    '.cwb-mt-badge { position: absolute; right: 1px; bottom: 1px; padding: 1px 4px;',
-    '  border-radius: 7px; font: 700 10px/1.3 sans-serif; color: #fff; line-height: 1.3;',
-    '  background: rgba(194,49,79,.9); }',
-    '.cwb-mt-item.ok .cwb-mt-badge { background: rgba(47,158,81,.92); }'
+    '.cwb-mt-item.lack { opacity: .4; }',                       // этого предмета нет во рту
+    '.cwb-mt-item.ok img { outline: 2px solid #2f9e51; outline-offset: -1px; border-radius: 6px; }'
   ].join('\n'));
 
   function css(rule) {
@@ -175,7 +174,7 @@
 
   function onListChange() {
     if (busy || !vm || !vm.item) return;
-    if (st.holdOrder && st.sortMode !== 'game') {
+    if (st.sortMode !== 'game') {
       applySort();                    // сервер пересортировал/добавил — возвращаем наш порядок
     } else {
       vm.$nextTick(mark);
@@ -202,7 +201,7 @@
       setAttr(el, 'cwb-type', t != null ? t : null);
       // крестик — на конкретном экземпляре, по id предмета
       setAttr(el, 'cwb-stale', (el.id && st.staleIds[el.id]) ? '1' : null);
-      setAttr(el, 'cwb-recipe', (t != null && recipeFind(t)) ? '1' : null);
+      setAttr(el, 'cwb-recipe', (t != null && st.recipe.indexOf(t) !== -1) ? '1' : null);
     });
 
     updatePanel();
@@ -225,12 +224,8 @@
     });
     return have;
   }
-  function recipeFind(type) {
-    for (var i = 0; i < st.recipe.length; i++) if (st.recipe[i].type === type) return st.recipe[i];
-    return null;
-  }
   function recipeComplete(have) {
-    return st.recipe.length > 0 && st.recipe.every(function (r) { return (have[r.type] || 0) >= r.cnt; });
+    return st.recipe.length > 0 && st.recipe.every(function (t) { return (have[t] || 0) >= 1; });
   }
 
   // --------------------------------------------------------------- interactions
@@ -260,13 +255,9 @@
   }
 
   function toggleRecipe(type) {
-    var entry = recipeFind(type);
-    if (entry) {
-      entry.cnt -= 1;
-      if (entry.cnt <= 0) st.recipe = st.recipe.filter(function (r) { return r !== entry; });
-    } else {
-      st.recipe.push({ type: type, cnt: 1 });
-    }
+    var i = st.recipe.indexOf(type);
+    if (i !== -1) st.recipe.splice(i, 1);
+    else st.recipe.push(type);
     save();
     mark();
   }
@@ -304,7 +295,7 @@
       '</div>' +
       '<div class="cwb-mt-body">' +
       '  <div class="cwb-mt-recipe" data-role="recipe"></div>' +
-      '  <div class="cwb-mt-row cwb-mt-hint">Alt+клик по предмету во рту — ± в рецепт</div>' +
+      '  <div class="cwb-mt-row cwb-mt-hint">Alt+клик по предмету во рту — в рецепт / из рецепта</div>' +
       '  <div class="cwb-mt-row cwb-mt-hint">Ctrl(⌘)+клик по предмету — крестик на нём</div>' +
       '  <div class="cwb-mt-row">' +
       '    <label class="cwb-mt-lbl">Сортировка</label>' +
@@ -312,7 +303,6 @@
       '      <option value="game">как у игры</option>' +
       '      <option value="type">по типу</option>' +
       '    </select>' +
-      '    <label class="cwb-mt-lbl cwb-mt-hold" title="Пересортировывать предметы автоматически, когда игра добавляет новый (сервер вставляет его по своему правилу) — выбранный порядок сохраняется"><input type="checkbox" data-role="hold"/> держать порядок</label>' +
       '  </div>' +
       '  <div class="cwb-mt-row cwb-mt-btnrow">' +
       '    <button type="button" class="cwb-mt-btn" data-act="clear-recipe">Очистить рецепт</button>' +
@@ -343,7 +333,6 @@
     if (st.size && st.size.h) panel.style.height = st.size.h + 'px';
     panel.classList.toggle('collapsed', st.collapsed);
     panel.querySelector('[data-role="sortmode"]').value = st.sortMode;
-    panel.querySelector('[data-role="hold"]').checked = st.holdOrder;
 
     // события панели
     panel.addEventListener('click', function (e) {
@@ -373,11 +362,6 @@
       if (st.sortMode === 'game') vm.$nextTick(mark); // просто перерисовать метки
       else applySort();
     });
-    panel.querySelector('[data-role="hold"]').addEventListener('change', function (e) {
-      st.holdOrder = !!e.target.checked;
-      save();
-      if (st.holdOrder && st.sortMode !== 'game') applySort();
-    });
 
     makeDraggable(panel, panel.querySelector('.cwb-mt-head'));
     makeResizable(panel, resizeHandle);
@@ -398,30 +382,29 @@
     status.textContent = complete ? 'собран ✓' : '';
     panel.classList.toggle('complete', complete);
 
-    // строки рецепта: просто иконки в ряд (натуральный размер, как в игре),
-    // счётчик — бейдж на иконке; клик по иконке — минус одна штука
+    // рецепт: просто иконки в ряд (натуральный размер, как в игре), без счётчиков;
+    // нет во рту — иконка приглушена, есть — с зелёной рамкой;
+    // всё есть — панель светится зелёным (класс complete)
     var box = panel.querySelector('[data-role="recipe"]');
     if (!st.recipe.length) {
       box.innerHTML = '<div class="cwb-mt-empty">Рецепт пуст — Alt+клик по предмету во рту</div>';
       return;
     }
     var html = '';
-    st.recipe.forEach(function (r) {
-      var h = have[r.type] || 0;
-      var ok = h >= r.cnt;
-      var img = mouthItemUrl(r.type);
+    st.recipe.forEach(function (type) {
+      var ok = (have[type] || 0) >= 1;
+      var img = mouthItemUrl(type);
       html +=
-        '<div class="cwb-mt-item' + (ok ? ' ok' : ' lack') + '" data-type="' + r.type + '"' +
-        '     title="есть ' + h + ' из ' + r.cnt + ' — клик: убрать одну">' +
+        '<div class="cwb-mt-item' + (ok ? ' ok' : ' lack') + '" data-type="' + type + '"' +
+        '     title="клик — убрать из рецепта">' +
         (img ? '<img src="' + img + '" alt="">' : '') +
-        '<span class="cwb-mt-badge">' + h + '/' + r.cnt + '</span>' +
         '</div>';
     });
     box.innerHTML = html;
     box.querySelectorAll('.cwb-mt-item').forEach(function (el) {
       el.addEventListener('click', function (e) {
         e.stopPropagation();
-        toggleRecipe(el.getAttribute('data-type')); // тот же минус, что у Alt+клика
+        toggleRecipe(el.getAttribute('data-type')); // клик — убрать из рецепта
       });
     });
   }
