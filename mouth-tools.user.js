@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, крестики
 // @namespace    catwar-mouth-tools
-// @version      1.1.0
+// @version      1.2.0
 // @description  Сортировка предметов во рту, закреплённое плавающее окно с «рецептом» из нескольких предметов и красный крестик на предметах, отмеченных как неактуальные.
 // @author       local
 // @match        https://catwar.su/cw3
@@ -97,19 +97,20 @@
     '.cwb-mt-btn { cursor: pointer; border: 0; background: rgba(255,255,255,.12); color: inherit; padding: 3px 8px; }',
     '.cwb-mt-btn:hover { background: rgba(255,255,255,.25); }',
     '.cwb-mt-btnrow button { flex: 1 1 auto; }',
-    '.cwb-mt-recipe { display: flex; flex-direction: column; gap: 4px; }',
+    '.cwb-mt-recipe { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }',
     '.cwb-mt-resize { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px;',
     '  cursor: nwse-resize; touch-action: none; z-index: 3; opacity: .55;',
     '  background: repeating-linear-gradient(135deg, transparent 0 3px, currentColor 3px 4px, transparent 4px 8px);',
     '  background-size: 10px 10px; background-position: 3px 3px; }',
     '.cwb-mt-resize:hover { opacity: 1; }',
     '.cwb-mt-empty { opacity: .65; padding: 4px 2px; }',
-    '.cwb-mt-line { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 6px; background: rgba(255,255,255,.06); }',
-    '.cwb-mt-line.ok { background: rgba(47,158,81,.28); }',
-    '.cwb-mt-line.lack .cwb-mt-count { color: #ff8f9d; }',
-    '.cwb-mt-thumb { width: 34px; height: 34px; display: block; image-rendering: pixelated; }',
-    '.cwb-mt-typed { font-size: 10px; opacity: .7; }',
-    '.cwb-mt-count { margin-left: auto; font-weight: 600; }'
+    '.cwb-mt-item { position: relative; cursor: pointer; line-height: 0; border-radius: 6px; }',
+    '.cwb-mt-item img { display: block; }', // натуральный размер, как в игре (#itemList img без width)
+    '.cwb-mt-item:hover img { outline: 2px solid rgba(255,255,255,.6); outline-offset: -1px; }',
+    '.cwb-mt-badge { position: absolute; right: 1px; bottom: 1px; padding: 1px 4px;',
+    '  border-radius: 7px; font: 700 10px/1.3 sans-serif; color: #fff; line-height: 1.3;',
+    '  background: rgba(194,49,79,.9); }',
+    '.cwb-mt-item.ok .cwb-mt-badge { background: rgba(47,158,81,.92); }'
   ].join('\n'));
 
   function css(rule) {
@@ -390,7 +391,8 @@
     status.textContent = complete ? 'собран ✓' : '';
     panel.classList.toggle('complete', complete);
 
-    // строки рецепта
+    // строки рецепта: просто иконки в ряд (натуральный размер, как в игре),
+    // счётчик — бейдж на иконке; клик по иконке — минус одна штука
     var box = panel.querySelector('[data-role="recipe"]');
     if (!st.recipe.length) {
       box.innerHTML = '<div class="cwb-mt-empty">Рецепт пуст — Alt+клик по предмету во рту</div>';
@@ -402,21 +404,17 @@
       var ok = h >= r.cnt;
       var img = mouthItemUrl(r.type);
       html +=
-        '<div class="cwb-mt-line' + (ok ? ' ok' : ' lack') + '">' +
-        (img ? '<img class="cwb-mt-thumb" src="' + img + '" alt="">' : '') +
-        '<span class="cwb-mt-typed" title="тип ' + r.type + '">#' + r.type + '</span>' +
-        '<span class="cwb-mt-count">' + h + ' / ' + r.cnt + '</span>' +
-        '<button type="button" class="cwb-mt-btn" data-act="rm" data-type="' + r.type + '">✕</button>' +
+        '<div class="cwb-mt-item' + (ok ? ' ok' : ' lack') + '" data-type="' + r.type + '"' +
+        '     title="есть ' + h + ' из ' + r.cnt + ' — клик: убрать одну">' +
+        (img ? '<img src="' + img + '" alt="">' : '') +
+        '<span class="cwb-mt-badge">' + h + '/' + r.cnt + '</span>' +
         '</div>';
     });
     box.innerHTML = html;
-    box.querySelectorAll('[data-act="rm"]').forEach(function (b) {
-      b.addEventListener('click', function (e) {
+    box.querySelectorAll('.cwb-mt-item').forEach(function (el) {
+      el.addEventListener('click', function (e) {
         e.stopPropagation();
-        var t = b.getAttribute('data-type');
-        st.recipe = st.recipe.filter(function (r) { return r.type !== t; });
-        save();
-        mark();
+        toggleRecipe(el.getAttribute('data-type')); // тот же минус, что у Alt+клика
       });
     });
   }
