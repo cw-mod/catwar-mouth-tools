@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, крестики
 // @namespace    catwar-mouth-tools
-// @version      1.0.0
+// @version      1.1.0
 // @description  Сортировка предметов во рту, закреплённое плавающее окно с «рецептом» из нескольких предметов и красный крестик на предметах, отмеченных как неактуальные.
 // @author       local
 // @match        https://catwar.su/cw3
@@ -33,6 +33,7 @@
       var parsed = JSON.parse(localStorage.getItem(LS_KEY)) || {};
       return {
         pos: typeof parsed.pos === 'object' && parsed.pos ? parsed.pos : null,
+        size: parsed.size && typeof parsed.size.w === 'number' ? parsed.size : null,
         collapsed: !!parsed.collapsed,
         sortMode: parsed.sortMode || 'game',   // game | type | fresh | lock | id
         holdOrder: parsed.holdOrder !== false, // сохранять порядок при новых предметах
@@ -40,7 +41,7 @@
         stale: parsed.stale || {}              // {type: true}
       };
     } catch (e) {
-      return { pos: null, collapsed: false, sortMode: 'game', holdOrder: true, recipe: [], stale: {} };
+      return { pos: null, size: null, collapsed: false, sortMode: 'game', holdOrder: true, recipe: [], stale: {} };
     }
   }
   function save() {
@@ -66,15 +67,17 @@
     // панель «рецепт» (жёстко вне #app, как #chat_float / #fightPanel)
     '#cwb-mt-root {',
     '  position: fixed; z-index: 100000; width: 300px;',
+    '  display: flex; flex-direction: column;',
     '  font: 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;',
     '  background: rgba(25, 25, 28, .92); color: #f2f2f2;',
     '  border: 1px solid rgba(255,255,255,.25); border-radius: 10px;',
     '  box-shadow: 0 8px 24px rgba(0,0,0,.35); box-sizing: border-box; user-select: none;',
+    '  overflow: hidden;',
     '}',
     '#cwb-mt-root.complete { border-color: #2f9e51; box-shadow: 0 8px 24px rgba(47,158,81,.35); }',
     '#cwb-mt-root.hidden { display: none; }',
     '#cwb-mt-root.collapsed .cwb-mt-body { display: none; }',
-    '#cwb-mt-root.collapsed { width: auto; min-width: 170px; }',
+    '#cwb-mt-root.collapsed { width: auto !important; height: auto !important; min-width: 170px; }',
     '.cwb-mt-head { display: flex; align-items: center; gap: 8px; padding: 5px 8px;',
     '  cursor: move; touch-action: none; background: rgba(255,255,255,.08);',
     '  border-radius: 10px 10px 0 0; font-weight: 600; }',
@@ -84,7 +87,7 @@
     '.cwb-mt-actions { display: flex; gap: 2px; }',
     '.cwb-mt-head .cwb-mt-btn { border: 0; background: rgba(255,255,255,.12); color: inherit; }',
     '.cwb-mt-head .cwb-mt-btn:hover { background: rgba(255,255,255,.25); }',
-    '.cwb-mt-body { padding: 8px; display: flex; flex-direction: column; gap: 6px; }',
+    '.cwb-mt-body { padding: 8px; display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; overflow-y: auto; }',
     '.cwb-mt-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }',
     '.cwb-mt-hint { font-size: 10px; opacity: .6; }',
     '.cwb-mt-lbl { opacity: .75; }',
@@ -94,7 +97,12 @@
     '.cwb-mt-btn { cursor: pointer; border: 0; background: rgba(255,255,255,.12); color: inherit; padding: 3px 8px; }',
     '.cwb-mt-btn:hover { background: rgba(255,255,255,.25); }',
     '.cwb-mt-btnrow button { flex: 1 1 auto; }',
-    '.cwb-mt-recipe { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }',
+    '.cwb-mt-recipe { display: flex; flex-direction: column; gap: 4px; }',
+    '.cwb-mt-resize { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px;',
+    '  cursor: nwse-resize; touch-action: none; z-index: 3; opacity: .55;',
+    '  background: repeating-linear-gradient(135deg, transparent 0 3px, currentColor 3px 4px, transparent 4px 8px);',
+    '  background-size: 10px 10px; background-position: 3px 3px; }',
+    '.cwb-mt-resize:hover { opacity: 1; }',
     '.cwb-mt-empty { opacity: .65; padding: 4px 2px; }',
     '.cwb-mt-line { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 6px; background: rgba(255,255,255,.06); }',
     '.cwb-mt-line.ok { background: rgba(47,158,81,.28); }',
@@ -148,17 +156,7 @@
   // --------------------------------------------------------------- sorting
 
   var CMP = {
-    type: function (a, b) { return (cmpInt(itemType(a)) - cmpInt(itemType(b))) || (a.id - b.id); },
-    id: function (a, b) { return a.id - b.id; },
-    fresh: function (a, b) {
-      // срок годности: сначала то, что портится раньше; без срока — в конец
-      var av = a.expiresAt == null ? 1 : 0, bv = b.expiresAt == null ? 1 : 0;
-      return (av - bv) || ((a.expiresAt || 0) - (b.expiresAt || 0)) || (a.id - b.id);
-    },
-    lock: function (a, b) {
-      var av = a.isLocked ? 1 : 0, bv = b.isLocked ? 1 : 0;
-      return (av - bv) || (cmpInt(itemType(a)) - cmpInt(itemType(b))) || (a.id - b.id);
-    }
+    type: function (a, b) { return (cmpInt(itemType(a)) - cmpInt(itemType(b))) || (a.id - b.id); }
   };
   function cmpInt(v) { var n = parseInt(v, 10); return isNaN(n) ? Number.MAX_SAFE_INTEGER : n; }
 
@@ -305,9 +303,6 @@
       '    <select class="cwb-mt-sort" data-role="sortmode">' +
       '      <option value="game">как у игры</option>' +
       '      <option value="type">по типу</option>' +
-      '      <option value="fresh">по свежести</option>' +
-      '      <option value="lock">по закреплённости</option>' +
-      '      <option value="id">по id</option>' +
       '    </select>' +
       '    <label class="cwb-mt-lbl cwb-mt-hold"><input type="checkbox" data-role="hold"/> держать</label>' +
       '  </div>' +
@@ -320,14 +315,24 @@
     // элементы, куда игра не лезет: тело, снаружи #app
     document.body.appendChild(panel);
 
-    // восстановление позиции
+    // уголок для изменения размера
+    var resizeHandle = document.createElement('div');
+    resizeHandle.className = 'cwb-mt-resize';
+    resizeHandle.title = 'потянуть — изменить размер';
+    panel.appendChild(resizeHandle);
+
+    // восстановление позиции и размера
     if (st.pos) {
+      panel.style.right = '';
+      panel.style.bottom = '';
       panel.style.left = Math.max(0, st.pos.x) + 'px';
       panel.style.top = Math.max(0, st.pos.y) + 'px';
     } else {
       panel.style.right = '12px';
       panel.style.bottom = '80px';
     }
+    if (st.size && st.size.w) panel.style.width = st.size.w + 'px';
+    if (st.size && st.size.h) panel.style.height = st.size.h + 'px';
     panel.classList.toggle('collapsed', st.collapsed);
     panel.querySelector('[data-role="sortmode"]').value = st.sortMode;
     panel.querySelector('[data-role="hold"]').checked = st.holdOrder;
@@ -367,6 +372,7 @@
     });
 
     makeDraggable(panel, panel.querySelector('.cwb-mt-head'));
+    makeResizable(panel, resizeHandle);
     panel.querySelectorAll('.cwb-mt-body').forEach(function (b) {
       b.addEventListener('click', function (e) { e.stopPropagation(); });
     });
@@ -431,7 +437,10 @@
       if (!drag) return;
       var x = Math.max(0, Math.min(window.innerWidth - root.offsetWidth, drag.px + e.clientX - drag.x0));
       var y = Math.max(0, Math.min(window.innerHeight - 40, drag.py + e.clientY - drag.y0));
+      // важно: при первичной привязке к правому-нижнему углу остаются
+      // inline right/bottom — вместе с top/left они растягивают панель
       root.style.right = '';
+      root.style.bottom = '';
       root.style.left = x + 'px';
       root.style.top = y + 'px';
     });
@@ -444,6 +453,36 @@
       st.pos = { x: Math.round(rect.left), y: Math.round(rect.top) };
       save();
       mark();
+    }
+  }
+
+  // --------------------------------------------------------------- resizable
+
+  function makeResizable(root, handle) {
+    var rz = null;
+    handle.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var rect = root.getBoundingClientRect();
+      rz = { w: rect.width, h: rect.height, x0: e.clientX, y0: e.clientY };
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    });
+    document.addEventListener('pointermove', function (e) {
+      if (!rz) return;
+      var w = Math.max(230, Math.min(window.innerWidth - 16, rz.w + e.clientX - rz.x0));
+      var h = Math.max(140, Math.min(window.innerHeight - 16, rz.h + e.clientY - rz.y0));
+      root.style.width = w + 'px';
+      root.style.height = h + 'px';
+    });
+    document.addEventListener('pointerup', stopResize);
+    document.addEventListener('pointercancel', stopResize);
+    function stopResize() {
+      if (!rz) return;
+      rz = null;
+      var rect = root.getBoundingClientRect();
+      st.size = { w: Math.round(rect.width), h: Math.round(rect.height) };
+      save();
     }
   }
 })();

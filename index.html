@@ -5,18 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CatWar: предметы во рту — сортировка, рецепт, крестики</title>
 <style>
+  :root{
+    --pink-bg: #ffe3f0;
+    --pink-deep: #d63384;
+    --pink-mid: #f06595;
+    --pink-soft: #fff0f6;
+    --pink-line: #f8c8dc;
+    --ink: #5c2340;
+  }
   body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-       font:15px/1.6 -apple-system,"Segoe UI",Arial,sans-serif;background:#242428;color:#f2f2f2}
-  .card{max-width:560px;padding:32px 36px;border:1px solid rgba(255,255,255,.2);
-        border-radius:14px;background:rgba(255,255,255,.06)}
-  h1{font-size:1.4em;margin:0 0 .4em}
-  .btn{display:inline-block;margin:14px 0;padding:10px 22px;border-radius:10px;
-       background:#2f9e51;color:#fff;text-decoration:none;font-weight:600}
-  .btn:hover{background:#37b360}
+       font:15px/1.6 -apple-system,"Segoe UI",Arial,sans-serif;
+       background:linear-gradient(160deg,#ffd6e8 0%,var(--pink-bg) 45%,#fdd7ea 100%);
+       color:var(--ink)}
+  .card{max-width:560px;padding:32px 36px;border:1px solid var(--pink-line);
+        border-radius:16px;background:rgba(255,255,255,.75);
+        box-shadow:0 14px 36px rgba(214,51,132,.18)}
+  h1{font-size:1.4em;margin:0 0 .4em;color:var(--pink-deep)}
+  .btn{display:inline-block;margin:14px 0;padding:10px 24px;border-radius:12px;
+       background:linear-gradient(135deg,var(--pink-mid),var(--pink-deep));
+       color:#fff;text-decoration:none;font-weight:600;
+       box-shadow:0 6px 16px rgba(214,51,132,.35)}
+  .btn:hover{filter:brightness(1.07)}
   ul{padding-left:1.3em}
   li{margin:.2em 0}
-  .hint{opacity:.65;font-size:.88em}
-  kbd{padding:1px 6px;border:1px solid rgba(255,255,255,.3);border-radius:5px;font-size:.9em;background:rgba(0,0,0,.25)}
+  .hint{opacity:.7;font-size:.88em}
+  kbd{padding:1px 6px;border:1px solid var(--pink-line);border-radius:5px;font-size:.9em;
+      background:var(--pink-soft);color:var(--pink-deep)}
 </style>
 </head>
 <body>
@@ -24,8 +38,8 @@
   <h1>CatWar: предметы во рту — сортировка, рецепт, крестики</h1>
   <p>Юзерскрипт для игровой страницы <code>/cw3</code>:</p>
   <ul>
-    <li>сортировка предметов во рту (по типу / свежести / закреплённости / id) с сохранением порядка;</li>
-    <li>закреплённое плавающее окно «Рецепт»</li>
+    <li>сортировка предметов во рту: как у игры или по типу;</li>
+    <li>закреплённое плавающее окно «Рецепт» (размер меняется за правый нижний уголок);</li>
     <li>красный крестик ✖ на предметах, отмеченных как неактуальные.</li>
   </ul>
   <p>

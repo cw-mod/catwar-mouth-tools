@@ -2,14 +2,14 @@
 
 Userscript for `/cw3` (catwar.su / catwar.net):
 
-1. **Sort mouth items** — by type / freshness (soonest expiry first) / lock state
-   / instance id; optional «держать» keeps the chosen order after the game
-   re-sorts (`lastPick`) on every new item.
-2. **Pinned «recipe» window** — floating collapsible panel (outside `#app`,
-   like `#chat_float`): `Alt`+click a mouth item to add/remove it from the
-   recipe; shows thumbnails, `have / need` counts (crossed-out items don't
-   count), turns green when collected; items matching the recipe get a green
-   outline in the mouth.
+1. **Sort mouth items** — game order or by type; optional «держать» keeps the
+   chosen order after the game re-sorts (`lastPick`) on every new item.
+2. **Pinned «recipe» window** — floating panel (outside `#app`, like
+   `#chat_float`), resizable by dragging the bottom-right corner:
+   `Alt`+click a mouth item to add/remove it from the recipe; shows
+   thumbnails, `have / need` counts (crossed-out items don't count), turns
+   green when collected; items matching the recipe get a green outline in
+   the mouth.
 3. **Stale crosses** — `Ctrl`/`⌘`+click marks a whole item type as irrelevant:
    red ✖ overlay via `data-cwb-*` + CSS pseudo-element (survives Vue
    re-renders).
