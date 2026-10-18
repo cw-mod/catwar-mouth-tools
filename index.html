@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CatWar: предметы во рту — сортировка, рецепт, крестики</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+       font:15px/1.6 -apple-system,"Segoe UI",Arial,sans-serif;background:#242428;color:#f2f2f2}
+  .card{max-width:560px;padding:32px 36px;border:1px solid rgba(255,255,255,.2);
+        border-radius:14px;background:rgba(255,255,255,.06)}
+  h1{font-size:1.4em;margin:0 0 .4em}
+  .btn{display:inline-block;margin:14px 0;padding:10px 22px;border-radius:10px;
+       background:#2f9e51;color:#fff;text-decoration:none;font-weight:600}
+  .btn:hover{background:#37b360}
+  ul{padding-left:1.3em}
+  li{margin:.2em 0}
+  .hint{opacity:.65;font-size:.88em}
+  kbd{padding:1px 6px;border:1px solid rgba(255,255,255,.3);border-radius:5px;font-size:.9em;background:rgba(0,0,0,.25)}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>CatWar: предметы во рту — сортировка, рецепт, крестики</h1>
+  <p>Юзерскрипт для игровой страницы <code>/cw3</code>:</p>
+  <ul>
+    <li>сортировка предметов во рту (по типу / свежести / закреплённости / id) с сохранением порядка;</li>
+    <li>закреплённое плавающее окно «Рецепт»</li>
+    <li>красный крестик ✖ на предметах, отмеченных как неактуальные.</li>
+  </ul>
+  <p>
+    <kbd>Alt</kbd>+клик по предмету — добавить/убрать в рецепт.<br>
+    <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+клик — отметить крестиком (неактуально).
+  </p>
+  <a class="btn" href="mouth-tools.user.js">Установить</a>
+  <p class="hint">
+    Нужен Tampermonkey / Violentmonkey. Нажмите «Установить» —
+    при активном менеджере юзерскриптов откроется окно установки.
+  </p>
+</div>
+</body>
+</html>
