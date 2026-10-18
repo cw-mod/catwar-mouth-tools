@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, крестики
 // @namespace    catwar-mouth-tools
-// @version      1.2.0
+// @version      1.2.1
 // @description  Сортировка предметов во рту, закреплённое плавающее окно с «рецептом» из нескольких предметов и красный крестик на предметах, отмеченных как неактуальные.
 // @author       local
 // @match        https://catwar.su/cw3
@@ -72,7 +72,7 @@
     '  background: rgba(25, 25, 28, .92); color: #f2f2f2;',
     '  border: 1px solid rgba(255,255,255,.25); border-radius: 10px;',
     '  box-shadow: 0 8px 24px rgba(0,0,0,.35); box-sizing: border-box; user-select: none;',
-    '  overflow: hidden;',
+    '  overflow: hidden; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px);',
     '}',
     '#cwb-mt-root.complete { border-color: #2f9e51; box-shadow: 0 8px 24px rgba(47,158,81,.35); }',
     '#cwb-mt-root.hidden { display: none; }',
