@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, крестики
 // @namespace    catwar-mouth-tools
-// @version      1.4.1
+// @version      1.5.0
 // @description  Сортировка предметов во рту, закреплённое плавающее окно с «рецептом» из нескольких предметов и красный крестик на предметах, отмеченных как неактуальные.
 // @author       local
 // @match        https://catwar.su/cw3
@@ -43,10 +43,11 @@
         collapsed: !!parsed.collapsed,
         sortMode: parsed.sortMode || 'game',   // game | type (порядок держится всегда)
         recipe: recipe,
-        staleIds: parsed.staleIds || {}        // {itemId: true} — крестик на конкретном экземпляре
+        stale: parsed.stale || {},               // {type: true} — крестик на всём типе предмета
+        staleIds: parsed.staleIds || {}          // легаси v1.3–1.4 (по экземплярам), мигрируем в init
       };
     } catch (e) {
-      return { pos: null, size: null, collapsed: false, sortMode: 'game', recipe: [], staleIds: {} };
+      return { pos: null, size: null, collapsed: false, sortMode: 'game', recipe: [], stale: {}, staleIds: {} };
     }
   }
   function save() {
@@ -67,7 +68,6 @@
     "  background: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M16 16 L84 84 M84 16 L16 84' stroke='%23e0224d' stroke-width='17' stroke-linecap='round'/%3E%3C/svg%3E\") center / 100% 100% no-repeat;" +
     '  opacity: .92; pointer-events: none; z-index: 2;' +
     '}',
-    '#itemList .itemInMouth[data-cwb-recipe] { outline: 2px solid #2f9e51; outline-offset: -1px; border-radius: 4px; }',
 
     // панель «рецепт» (жёстко вне #app, как #chat_float / #fightPanel)
     '#cwb-mt-root {',
@@ -165,11 +165,33 @@
 
   var busy = false;
   function applySort() {
-    var cmp = CMP[st.sortMode];
-    if (!cmp || busy) return;
+    if (busy) return;
     busy = true;
-    try { vm.item.list.sort(cmp); } catch (e) { /* ignore */ }
+    try {
+      if (st.sortMode === 'recipe') sortByRecipe(vm.item.list);
+      else {
+        var cmp = CMP[st.sortMode];
+        if (cmp) vm.item.list.sort(cmp);
+      }
+    } catch (e) { /* ignore */ }
     requestAnimationFrame(function () { busy = false; mark(); });
+  }
+
+  // «по рецепту»: сначала предметы рецепта в порядке рецепта (а,б,в...),
+  // остальные — после, в прежнем порядке. Пример: рецепт а+б+в, рот «ваабв» → «абвав»
+  function sortByRecipe(list) {
+    if (!st.recipe.length) return;
+    var used = {};
+    var out = [];
+    st.recipe.forEach(function (type) {
+      if (st.stale[type]) return; // перечёркнутые в рецепт не идут
+      for (var i = 0; i < list.length; i++) {
+        var it = list[i];
+        if (!used[it.id] && itemType(it) === type) { used[it.id] = 1; out.push(it); break; }
+      }
+    });
+    list.forEach(function (it) { if (!used[it.id]) out.push(it); });
+    for (var j = 0; j < out.length; j++) list[j] = out[j]; // та же длина, порядок на месте
   }
 
   function onListChange() {
@@ -199,9 +221,8 @@
         t = m ? m[1] : null;
       }
       setAttr(el, 'cwb-type', t != null ? t : null);
-      // крестик — на конкретном экземпляре, по id предмета
-      setAttr(el, 'cwb-stale', (el.id && st.staleIds[el.id]) ? '1' : null);
-      setAttr(el, 'cwb-recipe', (t != null && st.recipe.indexOf(t) !== -1) ? '1' : null);
+      // крестик — на всём типе предмета
+      setAttr(el, 'cwb-stale', (t != null && st.stale[t]) ? '1' : null);
     });
 
     updatePanel();
@@ -221,7 +242,7 @@
     vm.item.list.forEach(function (i) {
       var t = itemType(i);
       if (t == null) return;
-      if (i.id != null && st.staleIds[i.id]) return; // перечёркнутые экземпляры не считаем
+      if (st.stale[t]) return; // перечёркнутые типы не считаем собранными
       have[t] = (have[t] || 0) + 1;
     });
     return have;
@@ -233,7 +254,8 @@
   // --------------------------------------------------------------- interactions
 
   // модификаторы: Alt+клик — добавить/убрать из рецепта (по типу),
-  // Ctrl/⌘+клик — крестик на самом предмете (по экземпляру).
+  // Ctrl/⌘+клик — крестик на всём типе предмета.
+  // Состояния взаимоисключающие: тип либо в рецепте, либо перечёркнут, либо чистый.
   // Обычный клик не трогаем: у игры свой @click="item.showActions(now)".
   document.addEventListener('click', function (e) {
     if (!e.altKey && !e.ctrlKey && !e.metaKey) return;
@@ -242,13 +264,12 @@
     e.preventDefault();
     e.stopPropagation();
 
-    if (e.altKey) {
-      var type = el.getAttribute(PREFIX + 'type');
-      if (type == null) type = itemTypeById(el.id);
-      if (type != null) toggleRecipe(type);
-    } else if (el.id) {
-      toggleStale(String(el.id));
-    }
+    var type = el.getAttribute(PREFIX + 'type');
+    if (type == null) type = itemTypeById(el.id);
+    if (type == null) return;
+
+    if (e.altKey) toggleRecipe(type);
+    else toggleStale(type);
   }, true);
 
   function itemTypeById(id) {
@@ -259,13 +280,20 @@
   function toggleRecipe(type) {
     var i = st.recipe.indexOf(type);
     if (i !== -1) st.recipe.splice(i, 1);
-    else st.recipe.push(type);
+    else {
+      delete st.stale[type]; // тип не может быть одновременно в рецепте и перечёркнутым
+      st.recipe.push(type);
+    }
     save();
     mark();
   }
-  function toggleStale(id) {
-    if (st.staleIds[id]) delete st.staleIds[id];
-    else st.staleIds[id] = true;
+  function toggleStale(type) {
+    if (st.stale[type]) delete st.stale[type];
+    else {
+      st.stale[type] = true;
+      var i = st.recipe.indexOf(type); // взаимоисключение с рецептом
+      if (i !== -1) st.recipe.splice(i, 1);
+    }
     save();
     mark();
   }
@@ -275,6 +303,16 @@
   var panel = null;
   function init(vue) {
     vm = vue;
+
+    // миграция: крестики v1.3–1.4 (по экземплярам) → по типам
+    if (st.staleIds && Object.keys(st.staleIds).length) {
+      vm.item.list.forEach(function (i) {
+        var t = itemType(i);
+        if (t != null && st.staleIds[i.id]) st.stale[t] = true;
+      });
+      st.staleIds = {};
+      save();
+    }
 
     buildPanel();
 
@@ -298,12 +336,13 @@
       '<div class="cwb-mt-body">' +
       '  <div class="cwb-mt-recipe" data-role="recipe"></div>' +
       '  <div class="cwb-mt-row cwb-mt-hint">Alt+клик по предмету во рту — в рецепт / из рецепта</div>' +
-      '  <div class="cwb-mt-row cwb-mt-hint">Ctrl(⌘)+клик по предмету — крестик на нём</div>' +
+      '  <div class="cwb-mt-row cwb-mt-hint">Ctrl(⌘)+клик — крестик на виде предмета</div>' +
       '  <div class="cwb-mt-row">' +
       '    <label class="cwb-mt-lbl">Сортировка</label>' +
       '    <select class="cwb-mt-sort" data-role="sortmode">' +
       '      <option value="game">как у игры</option>' +
       '      <option value="type">по типу</option>' +
+      '      <option value="recipe">по рецепту</option>' +
       '    </select>' +
       '  </div>' +
       '  <div class="cwb-mt-row cwb-mt-btnrow">' +
@@ -353,7 +392,7 @@
         save();
         mark();
       } else if (act === 'clear-stale') {
-        st.staleIds = {};
+        st.stale = {};
         save();
         mark();
       }
