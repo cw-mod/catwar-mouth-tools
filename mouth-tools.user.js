@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, чердак
 // @namespace    catwar-mouth-tools
-// @version      1.8.1
+// @version      1.9.0
 // @description  Сортировка предметов во рту (в т.ч. по рецепту), закреплённое плавающее окно «Рецепт» и «чердак» — отдельный сворачиваемый блок наверху рта для ненужных предметов.
 // @author       local
 // @match        https://catwar.su/cw3
@@ -338,6 +338,39 @@
     return item ? itemType(item) : null;
   }
 
+  // Ctrl+клик (Cmd на Mac) по предмету — «галка» на все предметы этого типа:
+  // если предмет не выделен — выделяем весь тип, если выделен — снимаем весь тип.
+  // Использует игровой мультивыбор: vm.item.showActions(t, true) (как selectAll).
+  document.addEventListener('click', function (e) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    var el = e.target && e.target.closest ? e.target.closest('#itemList .itemInMouth') : null;
+    if (!el) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    var type = el.getAttribute(PREFIX + 'type');
+    if (type == null) type = itemTypeById(el.id);
+    if (type == null) return;
+
+    selectType(type);
+  }, true);
+
+  // macOS: Ctrl+клик — это правая кнопка; глушим контекстное меню на предметах рта
+  document.addEventListener('contextmenu', function (e) {
+    if (!e.ctrlKey) return;
+    if (e.target && e.target.closest && e.target.closest('#itemList .itemInMouth')) e.preventDefault();
+  }, true);
+
+  function selectType(type) {
+    if (!vm || !vm.item || vm.item.mixMode) return; // как у игры: в режиме смешивания выбора нет
+    var of = vm.item.list.filter(function (i) { return itemType(i) === type; });
+    if (!of.length) return;
+    var anyOff = of.some(function (i) { return !i.isActive; }); // есть невыделенные?
+    of.forEach(function (i) {
+      if (anyOff ? !i.isActive : i.isActive) vm.item.showActions(i, true); // toggle
+    });
+  }
+
   function toggleRecipe(type) {
     var i = st.recipe.indexOf(type);
     if (i !== -1) st.recipe.splice(i, 1);
@@ -401,6 +434,7 @@
       '  <div class="cwb-mt-recipe" data-role="recipe"></div>' +
       '  <div class="cwb-mt-row cwb-mt-hint">Alt+клик — в рецепт / из рецепта</div>' +
       '  <div class="cwb-mt-row cwb-mt-hint">Shift+клик — на чердак / обратно</div>' +
+      '  <div class="cwb-mt-row cwb-mt-hint">Ctrl+клик (Cmd на Mac) — галка на весь тип</div>' +
       '  <div class="cwb-mt-row">' +
       '    <label class="cwb-mt-lbl">Сортировка</label>' +
       '    <select class="cwb-mt-sort" data-role="sortmode">' +

@@ -19,6 +19,12 @@ Userscript for `/cw3` (catwar.su / catwar.net):
    to fold/unfold it; `Shift`+click again moves the kind back. Panel button
    «Разобрать чердак» returns everything at once.
 
+4. **Type check-select** — `Ctrl`+click a mouth item (`Cmd`+click on macOS)
+   to check-mark **all items of that kind** at once via the game's
+   multi-select (same ✓ marks as «Выбрать всё»); repeat to uncheck them all.
+   Works in any mode; in the game's mixing mode selection is disabled,
+   same as vanilla.
+
 Everything is client-side (no socket emits), state in `localStorage`
 key `cwb_mouth_tools`. Plain clicks keep the vanilla game item menu.
 
