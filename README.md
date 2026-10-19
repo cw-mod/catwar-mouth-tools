@@ -41,6 +41,10 @@ https://cw-mod.github.io/catwar-mouth-tools/
   the latter bypasses Vue 2's patched array methods, so Vue never re-renders
   and the sort visibly lags by seconds (the «recipe sort is slow» bug,
   fixed in v1.8.0).
+- The game's «Выбрать всё» button (`#item_multi`, `item.selectAll`) is patched
+  to select only non-attic items — attic kinds are never bulk-selected
+  (v1.8.1). Changing the recipe (Alt+click) now re-applies «by recipe» sort
+  immediately (v1.8.1).
 - Verified against the Oct 19 2026 bundle: mouth state is `vm.item.list`
   (`{id, type, isLocked, expiresAt…}`), server re-sorts by
   `["lastPick","id"]` inside `thing add` only. See

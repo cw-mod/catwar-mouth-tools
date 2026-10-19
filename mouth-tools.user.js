@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, чердак
 // @namespace    catwar-mouth-tools
-// @version      1.8.0
+// @version      1.8.1
 // @description  Сортировка предметов во рту (в т.ч. по рецепту), закреплённое плавающее окно «Рецепт» и «чердак» — отдельный сворачиваемый блок наверху рта для ненужных предметов.
 // @author       local
 // @match        https://catwar.su/cw3
@@ -343,13 +343,33 @@
     if (i !== -1) st.recipe.splice(i, 1);
     else st.recipe.push(type);
     save();
-    mark();
+    applySort(); // состав рецепта изменился — пересобрать порядок «по рецепту»
   }
   function toggleAttic(type) {
     if (st.attic[type]) delete st.attic[type];
     else st.attic[type] = true;
     save();
     applySort(); // чердачные предметы всегда поднимаются наверх — обновляем порядок
+  }
+
+  // «Выбрать всё» (#item_multi) — только предметы вне чердака.
+  // Игра: item.selectAll() идёт по list и для каждого невыбранного зовёт
+  // item.showActions(t, true) (проверено по бандлу cw3.js); подменяем метод,
+  // фильтруя чердачные типы. mixMode (смешивание) — как у игры: выбор отключён.
+  function patchSelectAll() {
+    if (typeof vm.item.selectAll !== 'function') return;      // игра изменилась — тихо пропускаем
+    if (vm.item.selectAll.cwbAtticSkip) return;                 // уже патчено
+    var wrapped = function () {
+      if (vm.item.mixMode) return;
+      vm.item.list.forEach(function (t) {
+        if (t.isActive) return;
+        var ty = itemType(t);
+        if (ty != null && st.attic[ty]) return; // чердак — не выбираем
+        vm.item.showActions(t, true);
+      });
+    };
+    wrapped.cwbAtticSkip = true;
+    vm.item.selectAll = wrapped;
   }
 
   // --------------------------------------------------------------- panel
@@ -359,6 +379,7 @@
     vm = vue;
 
     buildPanel();
+    patchSelectAll();
 
     // реактивность: подписка на состав списка (id по порядку)
     vm.$watch(function () { return vm.item.list.map(function (i) { return i.id; }).join(','); },
@@ -431,7 +452,7 @@
       } else if (act === 'clear-recipe') {
         st.recipe = [];
         save();
-        mark();
+        applySort(); // рецепт опустел — вернуть порядок без «рецептных» наверху
       } else if (act === 'clear-attic') {
         st.attic = {};
         save();
