@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, крестики
 // @namespace    catwar-mouth-tools
-// @version      1.4.0
+// @version      1.4.1
 // @description  Сортировка предметов во рту, закреплённое плавающее окно с «рецептом» из нескольких предметов и красный крестик на предметах, отмеченных как неактуальные.
 // @author       local
 // @match        https://catwar.su/cw3
@@ -23,7 +23,7 @@
   'use strict';
 
   var LS_KEY = 'cwb_mouth_tools'; // единый JSON: позиция, рецепт, крестики, сортировка
-  var PREFIX = 'data-cwb-';      // наши атрибуты на чужих (Vue) элементах — переживают ре-рендер
+  var PREFIX = 'data-';           // атрибуты data-cwb-* на чужих (Vue) элементах — переживают ре-рендер
 
   // --------------------------------------------------------------- state
 
@@ -209,6 +209,8 @@
   function setAttr(el, name, val) {
     if (val != null) el.setAttribute(PREFIX + name, val);
     else el.removeAttribute(PREFIX + name);
+    // подчистить легаси-атрибуты v1.0–1.4 (задвоенный префикс data-cwb-cwb-*)
+    el.removeAttribute('data-cwb-' + name);
   }
 
   // --------------------------------------------------------------- counts
