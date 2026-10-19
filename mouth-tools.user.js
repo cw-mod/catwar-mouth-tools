@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, чердак
 // @namespace    catwar-mouth-tools
-// @version      1.7.0
-// @description  Сортировка предметов во рту (в т.ч. по рецепту), закреплённое плавающее окно «Рецепт» и «чердак» — отдельная строка рта для ненужных предметов.
+// @version      1.8.0
+// @description  Сортировка предметов во рту (в т.ч. по рецепту), закреплённое плавающее окно «Рецепт» и «чердак» — отдельный сворачиваемый блок наверху рта для ненужных предметов.
 // @author       local
 // @match        https://catwar.su/cw3
 // @match        https://catwar.su/cw3/
@@ -41,12 +41,13 @@
         pos: typeof parsed.pos === 'object' && parsed.pos ? parsed.pos : null,
         size: parsed.size && typeof parsed.size.w === 'number' ? parsed.size : null,
         collapsed: !!parsed.collapsed,
+        atticFolded: !!parsed.atticFolded,   // чердак свёрнут
         sortMode: parsed.sortMode || 'game',   // game | type (порядок держится всегда)
         recipe: recipe,
-        attic: parsed.attic || {}                // {type: true} — «чердак»: отдельная строка рта
+        attic: parsed.attic || {}                // {type: true} — «чердак»: отдельный блок рта
       };
     } catch (e) {
-      return { pos: null, size: null, collapsed: false, sortMode: 'game', recipe: [], attic: {} };
+      return { pos: null, size: null, collapsed: false, atticFolded: false, sortMode: 'game', recipe: [], attic: {} };
     }
   }
   function save() {
@@ -56,10 +57,21 @@
   // --------------------------------------------------------------- styles
 
   css([
-    // «чердак»: ненужные виды предметов — отдельной строкой рта, приглушены.
-    // первый чердачный предмет принудительно начинает новую строку (grid-column-start: 1)
+    // «чердак»: ненужные виды предметов — отдельным сворачиваемым блоком ВВЕРХУ рта.
+    // первый «обычный» предмет после чердачного блока начинает новую строку (grid-column-start: 1)
     '#itemList .itemInMouth[data-cwb-attic] { opacity: .45; filter: grayscale(.7); }',
-    '#itemList .itemInMouth[data-cwb-attic-first] { grid-column-start: 1; margin-top: 8px; }',
+    '#itemList .itemInMouth[data-cwb-main-first] { grid-column-start: 1; margin-top: 8px; }',
+    '#itemList.cwb-attic-folded .itemInMouth[data-cwb-attic] { display: none; }',
+
+    // заголовок-переключатель «Чердак ×N ▾» (вставляется перед #itemList)
+    '#cwb-mt-attic-strip { display: inline-flex; align-items: center; gap: 6px;',
+    '  margin: 2px 0 4px; padding: 1px 8px; width: max-content; box-sizing: border-box;',
+    '  font: 11px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;',
+    '  color: #f2f2f2; background: rgba(25,25,28,.7);',
+    '  border: 1px solid rgba(255,255,255,.25); border-radius: 6px;',
+    '  cursor: pointer; user-select: none; }',
+    '#cwb-mt-attic-strip:hover { background: rgba(25,25,28,.9); }',
+    '.cwb-mt-a-fold { display: inline-block; width: 1em; text-align: center; }',
 
     // панель «рецепт» (жёстко вне #app, как #chat_float / #fightPanel)
     '#cwb-mt-root {',
@@ -165,17 +177,21 @@
         var cmp = CMP[st.sortMode];
         if (cmp) vm.item.list.sort(cmp);
       }
-      sinkAttic(vm.item.list); // чердак — всегда отдельной (последней) строкой рта
+      floatAttic(vm.item.list); // чердак — всегда отдельным (верхним) блоком рта
     } catch (e) { /* ignore */ }
     requestAnimationFrame(function () { busy = false; mark(); });
   }
 
   // реактивная замена порядка: Vue 2 не видит запись по индексам (list[j] = ...),
-  // поэтому только через splice — иначе DOM не перерисуется
+  // поэтому только через splice — иначе DOM не перерисуется.
+  // ВАЖНО: splice берём через сам массив (list.splice), а НЕ через Array.prototype —
+  // иначе вызывается нативный метод мимо перехватчика Vue, Vue не оповещается
+  // и DOM висит со старым порядком до ближайшего перерендера игры
+  // (симптом: «по рецепту» сортируется с огромной задержкой).
   function reorderList(list, out) {
     if (out.length !== list.length) return;
     var args = [0, list.length].concat(out);
-    Array.prototype.splice.apply(list, args);
+    list.splice.apply(list, args);
   }
 
   // «по рецепту»: сначала предметы рецепта в порядке рецепта (а,б,в...),
@@ -194,16 +210,16 @@
     reorderList(list, out);
   }
 
-  // чердачные предметы — в конец списка (порядок остальных не меняется)
-  function sinkAttic(list) {
+  // чердачные предметы — в начало списка (блок НАВЕРХУ рта, порядок остальных не меняется)
+  function floatAttic(list) {
     if (!Object.keys(st.attic).length) return;
-    var out = [], atticOut = [];
+    var atticOut = [], out = [];
     list.forEach(function (it) {
       var t = itemType(it);
       if (t != null && st.attic[t]) atticOut.push(it);
       else out.push(it);
     });
-    reorderList(list, out.concat(atticOut));
+    reorderList(list, atticOut.concat(out));
   }
 
   function onListChange() {
@@ -221,6 +237,8 @@
     var typeById = {};
     vm.item.list.forEach(function (i) { if (i.id != null) typeById[i.id] = itemType(i); });
 
+    var firstMain = null;
+    var atticCount = 0;
     container.querySelectorAll('.itemInMouth').forEach(function (el) {
       var t = typeById[el.id];
       if (t == null) {
@@ -230,12 +248,20 @@
       }
       setAttr(el, 'cwb-type', t != null ? t : null);
       // чердак — на всём типе предмета
-      setAttr(el, 'cwb-attic', (t != null && st.attic[t]) ? '1' : null);
-      setAttr(el, 'cwb-attic-first', null);
+      var isAttic = t != null && !!st.attic[t];
+      setAttr(el, 'cwb-attic', isAttic ? '1' : null);
+      setAttr(el, 'cwb-attic-first', null); // легаси v1.5–1.7
+      setAttr(el, 'cwb-main-first', null);
+      if (isAttic) atticCount++;
+      else if (!firstMain) firstMain = el;
     });
-    // первый чердачный предмет в DOM начинает новую строку рта
-    var firstAttic = container.querySelector('.itemInMouth[data-cwb-attic]');
-    if (firstAttic) setAttr(firstAttic, 'cwb-attic-first', '1');
+    // первый «обычный» предмет после чердачного блока начинает новую строку рта
+    if (atticCount && firstMain) setAttr(firstMain, 'cwb-main-first', '1');
+
+    // свёрнутость чердака (CSS прячет .itemInMouth[data-cwb-attic])
+    container.classList.toggle('cwb-attic-folded', !!st.atticFolded);
+
+    syncAtticStrip(container, atticCount);
 
     updatePanel();
   }
@@ -244,6 +270,31 @@
     else el.removeAttribute(PREFIX + name);
     // подчистить легаси-атрибуты v1.0–1.4 (задвоенный префикс data-cwb-cwb-*)
     el.removeAttribute('data-cwb-' + name);
+  }
+
+  // заголовок «Чердак ×N ▾» перед ртом: клик — свернуть/развернуть чердак.
+  // mark() вызывается после каждого изменения списка — если игра прибрала
+  // наш вставной элемент при перерендере родителя, он создаётся заново.
+  function syncAtticStrip(container, atticCount) {
+    var strip = document.getElementById('cwb-mt-attic-strip');
+    if (!atticCount) {
+      if (strip && strip.parentNode) strip.parentNode.removeChild(strip);
+      return;
+    }
+    if (!strip) {
+      if (!container.parentNode) return;
+      strip = document.createElement('div');
+      strip.id = 'cwb-mt-attic-strip';
+      strip.title = 'свернуть/развернуть чердак';
+      strip.addEventListener('click', function () {
+        st.atticFolded = !st.atticFolded;
+        save();
+        mark();
+      });
+      container.parentNode.insertBefore(strip, container);
+    }
+    strip.innerHTML = 'Чердак ×' + atticCount +
+      ' <span class="cwb-mt-a-fold">' + (st.atticFolded ? '▸' : '▾') + '</span>';
   }
 
   // --------------------------------------------------------------- counts
@@ -298,7 +349,7 @@
     if (st.attic[type]) delete st.attic[type];
     else st.attic[type] = true;
     save();
-    applySort(); // чердачные предметы всегда утопляются в конец — обновляем порядок
+    applySort(); // чердачные предметы всегда поднимаются наверх — обновляем порядок
   }
 
   // --------------------------------------------------------------- panel
