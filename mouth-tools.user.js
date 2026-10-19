@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CatWar: предметы во рту — сортировка, рецепт, крестики
 // @namespace    catwar-mouth-tools
-// @version      1.5.0
+// @version      1.6.0
 // @description  Сортировка предметов во рту, закреплённое плавающее окно с «рецептом» из нескольких предметов и красный крестик на предметах, отмеченных как неактуальные.
 // @author       local
 // @match        https://catwar.su/cw3
@@ -44,10 +44,11 @@
         sortMode: parsed.sortMode || 'game',   // game | type (порядок держится всегда)
         recipe: recipe,
         stale: parsed.stale || {},               // {type: true} — крестик на всём типе предмета
-        staleIds: parsed.staleIds || {}          // легаси v1.3–1.4 (по экземплярам), мигрируем в init
+        attic: parsed.attic || {},                // {type: true} — «чердак»: отдельная строка рта
+        staleIds: parsed.staleIds || {}           // легаси v1.3–1.4 (по экземплярам), мигрируем в init
       };
     } catch (e) {
-      return { pos: null, size: null, collapsed: false, sortMode: 'game', recipe: [], stale: {}, staleIds: {} };
+      return { pos: null, size: null, collapsed: false, sortMode: 'game', recipe: [], stale: {}, attic: {}, staleIds: {} };
     }
   }
   function save() {
@@ -68,6 +69,10 @@
     "  background: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M16 16 L84 84 M84 16 L16 84' stroke='%23e0224d' stroke-width='17' stroke-linecap='round'/%3E%3C/svg%3E\") center / 100% 100% no-repeat;" +
     '  opacity: .92; pointer-events: none; z-index: 2;' +
     '}',
+
+    // «чердак»: ненужные виды предметов — отдельной строкой рта, приглушены
+    '#itemList .itemInMouth[data-cwb-attic] { opacity: .45; filter: grayscale(.7); }',
+    '#itemList .itemInMouth[data-cwb-attic-first] { grid-column-start: 1; margin-top: 8px; }',
 
     // панель «рецепт» (жёстко вне #app, как #chat_float / #fightPanel)
     '#cwb-mt-root {',
@@ -173,8 +178,22 @@
         var cmp = CMP[st.sortMode];
         if (cmp) vm.item.list.sort(cmp);
       }
+      sinkAttic(vm.item.list); // чердак — всегда отдельной (последней) строкой рта
     } catch (e) { /* ignore */ }
     requestAnimationFrame(function () { busy = false; mark(); });
+  }
+
+  // чердачные предметы — в конец списка (перед ними ничего не было — порядок остальных не меняется)
+  function sinkAttic(list) {
+    if (!Object.keys(st.attic).length) return;
+    var out = [], atticOut = [];
+    list.forEach(function (it) {
+      var t = itemType(it);
+      if (t != null && st.attic[t]) atticOut.push(it);
+      else out.push(it);
+    });
+    var all = out.concat(atticOut);
+    for (var j = 0; j < all.length; j++) list[j] = all[j];
   }
 
   // «по рецепту»: сначала предметы рецепта в порядке рецепта (а,б,в...),
@@ -196,11 +215,7 @@
 
   function onListChange() {
     if (busy || !vm || !vm.item) return;
-    if (st.sortMode !== 'game') {
-      applySort();                    // сервер пересортировал/добавил — возвращаем наш порядок
-    } else {
-      vm.$nextTick(mark);
-    }
+    applySort(); // сортировка (если выбрана) + чердак; в режиме «как у игры» без чердака ничего не меняет
   }
 
   // --------------------------------------------------------------- marking
@@ -223,7 +238,13 @@
       setAttr(el, 'cwb-type', t != null ? t : null);
       // крестик — на всём типе предмета
       setAttr(el, 'cwb-stale', (t != null && st.stale[t]) ? '1' : null);
+      // чердак — на всём типе предмета
+      setAttr(el, 'cwb-attic', (t != null && st.attic[t]) ? '1' : null);
+      setAttr(el, 'cwb-attic-first', null);
     });
+    // первый чердачный предмет в DOM начинает новую строку рта
+    var firstAttic = container.querySelector('.itemInMouth[data-cwb-attic]');
+    if (firstAttic) firstAttic.setAttribute(PREFIX + 'attic-first', '1');
 
     updatePanel();
   }
@@ -254,11 +275,12 @@
   // --------------------------------------------------------------- interactions
 
   // модификаторы: Alt+клик — добавить/убрать из рецепта (по типу),
-  // Ctrl/⌘+клик — крестик на всём типе предмета.
-  // Состояния взаимоисключающие: тип либо в рецепте, либо перечёркнут, либо чистый.
+  // Ctrl/⌘+клик — крестик на всём типе предмета,
+  // Shift+клик — на чердак / обратно (отдельная строка рта).
+  // Состояния крестик/рецепт взаимоисключающие.
   // Обычный клик не трогаем: у игры свой @click="item.showActions(now)".
   document.addEventListener('click', function (e) {
-    if (!e.altKey && !e.ctrlKey && !e.metaKey) return;
+    if (!e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) return;
     var el = e.target && e.target.closest ? e.target.closest('#itemList .itemInMouth') : null;
     if (!el) return;
     e.preventDefault();
@@ -269,6 +291,7 @@
     if (type == null) return;
 
     if (e.altKey) toggleRecipe(type);
+    else if (e.shiftKey) toggleAttic(type);
     else toggleStale(type);
   }, true);
 
@@ -296,6 +319,12 @@
     }
     save();
     mark();
+  }
+  function toggleAttic(type) {
+    if (st.attic[type]) delete st.attic[type];
+    else st.attic[type] = true;
+    save();
+    applySort(); // чердачные предметы всегда утопляются в конец — обновляем порядок
   }
 
   // --------------------------------------------------------------- panel
@@ -330,13 +359,13 @@
       '  <span class="cwb-mt-status" data-role="status"></span>' +
       '  <span class="cwb-mt-actions">' +
       '    <button type="button" class="cwb-mt-btn cwb-mt-fold" data-act="fold">' + (st.collapsed ? '▸' : '▾') + '</button>' +
-      '    <button type="button" class="cwb-mt-btn cwb-mt-close" data-act="close">×</button>' +
       '  </span>' +
       '</div>' +
       '<div class="cwb-mt-body">' +
       '  <div class="cwb-mt-recipe" data-role="recipe"></div>' +
-      '  <div class="cwb-mt-row cwb-mt-hint">Alt+клик по предмету во рту — в рецепт / из рецепта</div>' +
+      '  <div class="cwb-mt-row cwb-mt-hint">Alt+клик — в рецепт / из рецепта</div>' +
       '  <div class="cwb-mt-row cwb-mt-hint">Ctrl(⌘)+клик — крестик на виде предмета</div>' +
+      '  <div class="cwb-mt-row cwb-mt-hint">Shift+клик — на чердак / обратно</div>' +
       '  <div class="cwb-mt-row">' +
       '    <label class="cwb-mt-lbl">Сортировка</label>' +
       '    <select class="cwb-mt-sort" data-role="sortmode">' +
@@ -348,6 +377,7 @@
       '  <div class="cwb-mt-row cwb-mt-btnrow">' +
       '    <button type="button" class="cwb-mt-btn" data-act="clear-recipe">Очистить рецепт</button>' +
       '    <button type="button" class="cwb-mt-btn" data-act="clear-stale">Снять крестики</button>' +
+      '    <button type="button" class="cwb-mt-btn" data-act="clear-attic">Разобрать чердак</button>' +
       '  </div>' +
       '</div>';
 
@@ -380,9 +410,7 @@
       var btn = e.target.closest ? e.target.closest('[data-act]') : null;
       if (!btn) return;
       var act = btn.getAttribute('data-act');
-      if (act === 'close') {
-        panel.classList.add('hidden');
-      } else if (act === 'fold') {
+      if (act === 'fold') {
         st.collapsed = !st.collapsed;
         panel.classList.toggle('collapsed', st.collapsed);
         btn.textContent = st.collapsed ? '▸' : '▾';
@@ -395,6 +423,10 @@
         st.stale = {};
         save();
         mark();
+      } else if (act === 'clear-attic') {
+        st.attic = {};
+        save();
+        applySort();
       }
     });
     panel.querySelector('[data-role="sortmode"]').addEventListener('change', function (e) {
@@ -406,9 +438,9 @@
 
     makeDraggable(panel, panel.querySelector('.cwb-mt-head'));
     makeResizable(panel, resizeHandle);
-    panel.querySelectorAll('.cwb-mt-body').forEach(function (b) {
-      b.addEventListener('click', function (e) { e.stopPropagation(); });
-    });
+    // клики внутри панели не должны доходить до документа (игра),
+    // но наши собственные обработчики на самой панели это не ломает
+    panel.addEventListener('click', function (e) { e.stopPropagation(); });
 
     updatePanel();
   }

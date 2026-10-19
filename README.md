@@ -18,6 +18,10 @@ Userscript for `/cw3` (catwar.su / catwar.net):
   states are mutually exclusive: a kind is either crossed out, or in the
   recipe, or unmarked. Overlay via `data-cwb-*` + CSS pseudo-element
   (survives Vue re-renders).
+4. **«Attic» (чердак)** — `Shift`+click moves an item kind to a separate
+  last row of the mouth (dimmed, greyed out) to keep unneeded items out of
+  the way; `Shift`+click again moves it back. Panel button «Разобрать
+  чердак» returns everything.
 
 Everything is client-side (no socket emits), state in `localStorage`
 key `cwb_mouth_tools`. Plain clicks keep the vanilla game item menu.
