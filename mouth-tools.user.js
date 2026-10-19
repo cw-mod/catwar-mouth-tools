@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         CatWar: предметы во рту — сортировка, рецепт, крестики
+// @name         CatWar: предметы во рту — сортировка, рецепт, чердак
 // @namespace    catwar-mouth-tools
-// @version      1.6.0
-// @description  Сортировка предметов во рту, закреплённое плавающее окно с «рецептом» из нескольких предметов и красный крестик на предметах, отмеченных как неактуальные.
+// @version      1.7.0
+// @description  Сортировка предметов во рту (в т.ч. по рецепту), закреплённое плавающее окно «Рецепт» и «чердак» — отдельная строка рта для ненужных предметов.
 // @author       local
 // @match        https://catwar.su/cw3
 // @match        https://catwar.su/cw3/
@@ -22,7 +22,7 @@
 (function () {
   'use strict';
 
-  var LS_KEY = 'cwb_mouth_tools'; // единый JSON: позиция, рецепт, крестики, сортировка
+  var LS_KEY = 'cwb_mouth_tools'; // единый JSON: позиция, рецепт, чердак, сортировка
   var PREFIX = 'data-';           // атрибуты data-cwb-* на чужих (Vue) элементах — переживают ре-рендер
 
   // --------------------------------------------------------------- state
@@ -43,12 +43,10 @@
         collapsed: !!parsed.collapsed,
         sortMode: parsed.sortMode || 'game',   // game | type (порядок держится всегда)
         recipe: recipe,
-        stale: parsed.stale || {},               // {type: true} — крестик на всём типе предмета
-        attic: parsed.attic || {},                // {type: true} — «чердак»: отдельная строка рта
-        staleIds: parsed.staleIds || {}           // легаси v1.3–1.4 (по экземплярам), мигрируем в init
+        attic: parsed.attic || {}                // {type: true} — «чердак»: отдельная строка рта
       };
     } catch (e) {
-      return { pos: null, size: null, collapsed: false, sortMode: 'game', recipe: [], stale: {}, attic: {}, staleIds: {} };
+      return { pos: null, size: null, collapsed: false, sortMode: 'game', recipe: [], attic: {} };
     }
   }
   function save() {
@@ -58,19 +56,8 @@
   // --------------------------------------------------------------- styles
 
   css([
-    // крестик и рамки на предметах во рту; только data-* + CSS,
-    // классы/стили .itemInMouth Vue перезаписывает (см. pitfalls).
-    // крестик — большой SVG поверх картинки предмета (data-URI в ::after)
-    '#itemList .itemInMouth { position: relative; }',
-    '#itemList .itemInMouth[data-cwb-stale] { background: rgba(224, 34, 77, .14); border-radius: 4px; }',
-    '#itemList .itemInMouth[data-cwb-stale]::after {' +
-    '  content: "";' +
-    '  position: absolute; left: 0; top: 0; right: 0; bottom: 0;' +
-    "  background: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M16 16 L84 84 M84 16 L16 84' stroke='%23e0224d' stroke-width='17' stroke-linecap='round'/%3E%3C/svg%3E\") center / 100% 100% no-repeat;" +
-    '  opacity: .92; pointer-events: none; z-index: 2;' +
-    '}',
-
-    // «чердак»: ненужные виды предметов — отдельной строкой рта, приглушены
+    // «чердак»: ненужные виды предметов — отдельной строкой рта, приглушены.
+    // первый чердачный предмет принудительно начинает новую строку (grid-column-start: 1)
     '#itemList .itemInMouth[data-cwb-attic] { opacity: .45; filter: grayscale(.7); }',
     '#itemList .itemInMouth[data-cwb-attic-first] { grid-column-start: 1; margin-top: 8px; }',
 
@@ -183,17 +170,12 @@
     requestAnimationFrame(function () { busy = false; mark(); });
   }
 
-  // чердачные предметы — в конец списка (перед ними ничего не было — порядок остальных не меняется)
-  function sinkAttic(list) {
-    if (!Object.keys(st.attic).length) return;
-    var out = [], atticOut = [];
-    list.forEach(function (it) {
-      var t = itemType(it);
-      if (t != null && st.attic[t]) atticOut.push(it);
-      else out.push(it);
-    });
-    var all = out.concat(atticOut);
-    for (var j = 0; j < all.length; j++) list[j] = all[j];
+  // реактивная замена порядка: Vue 2 не видит запись по индексам (list[j] = ...),
+  // поэтому только через splice — иначе DOM не перерисуется
+  function reorderList(list, out) {
+    if (out.length !== list.length) return;
+    var args = [0, list.length].concat(out);
+    Array.prototype.splice.apply(list, args);
   }
 
   // «по рецепту»: сначала предметы рецепта в порядке рецепта (а,б,в...),
@@ -203,14 +185,25 @@
     var used = {};
     var out = [];
     st.recipe.forEach(function (type) {
-      if (st.stale[type]) return; // перечёркнутые в рецепт не идут
       for (var i = 0; i < list.length; i++) {
         var it = list[i];
         if (!used[it.id] && itemType(it) === type) { used[it.id] = 1; out.push(it); break; }
       }
     });
     list.forEach(function (it) { if (!used[it.id]) out.push(it); });
-    for (var j = 0; j < out.length; j++) list[j] = out[j]; // та же длина, порядок на месте
+    reorderList(list, out);
+  }
+
+  // чердачные предметы — в конец списка (порядок остальных не меняется)
+  function sinkAttic(list) {
+    if (!Object.keys(st.attic).length) return;
+    var out = [], atticOut = [];
+    list.forEach(function (it) {
+      var t = itemType(it);
+      if (t != null && st.attic[t]) atticOut.push(it);
+      else out.push(it);
+    });
+    reorderList(list, out.concat(atticOut));
   }
 
   function onListChange() {
@@ -236,15 +229,13 @@
         t = m ? m[1] : null;
       }
       setAttr(el, 'cwb-type', t != null ? t : null);
-      // крестик — на всём типе предмета
-      setAttr(el, 'cwb-stale', (t != null && st.stale[t]) ? '1' : null);
       // чердак — на всём типе предмета
       setAttr(el, 'cwb-attic', (t != null && st.attic[t]) ? '1' : null);
       setAttr(el, 'cwb-attic-first', null);
     });
     // первый чердачный предмет в DOM начинает новую строку рта
     var firstAttic = container.querySelector('.itemInMouth[data-cwb-attic]');
-    if (firstAttic) firstAttic.setAttribute(PREFIX + 'attic-first', '1');
+    if (firstAttic) setAttr(firstAttic, 'cwb-attic-first', '1');
 
     updatePanel();
   }
@@ -263,7 +254,6 @@
     vm.item.list.forEach(function (i) {
       var t = itemType(i);
       if (t == null) return;
-      if (st.stale[t]) return; // перечёркнутые типы не считаем собранными
       have[t] = (have[t] || 0) + 1;
     });
     return have;
@@ -275,12 +265,10 @@
   // --------------------------------------------------------------- interactions
 
   // модификаторы: Alt+клик — добавить/убрать из рецепта (по типу),
-  // Ctrl/⌘+клик — крестик на всём типе предмета,
   // Shift+клик — на чердак / обратно (отдельная строка рта).
-  // Состояния крестик/рецепт взаимоисключающие.
   // Обычный клик не трогаем: у игры свой @click="item.showActions(now)".
   document.addEventListener('click', function (e) {
-    if (!e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) return;
+    if (!e.altKey && !e.shiftKey) return;
     var el = e.target && e.target.closest ? e.target.closest('#itemList .itemInMouth') : null;
     if (!el) return;
     e.preventDefault();
@@ -291,8 +279,7 @@
     if (type == null) return;
 
     if (e.altKey) toggleRecipe(type);
-    else if (e.shiftKey) toggleAttic(type);
-    else toggleStale(type);
+    else toggleAttic(type);
   }, true);
 
   function itemTypeById(id) {
@@ -303,20 +290,7 @@
   function toggleRecipe(type) {
     var i = st.recipe.indexOf(type);
     if (i !== -1) st.recipe.splice(i, 1);
-    else {
-      delete st.stale[type]; // тип не может быть одновременно в рецепте и перечёркнутым
-      st.recipe.push(type);
-    }
-    save();
-    mark();
-  }
-  function toggleStale(type) {
-    if (st.stale[type]) delete st.stale[type];
-    else {
-      st.stale[type] = true;
-      var i = st.recipe.indexOf(type); // взаимоисключение с рецептом
-      if (i !== -1) st.recipe.splice(i, 1);
-    }
+    else st.recipe.push(type);
     save();
     mark();
   }
@@ -332,16 +306,6 @@
   var panel = null;
   function init(vue) {
     vm = vue;
-
-    // миграция: крестики v1.3–1.4 (по экземплярам) → по типам
-    if (st.staleIds && Object.keys(st.staleIds).length) {
-      vm.item.list.forEach(function (i) {
-        var t = itemType(i);
-        if (t != null && st.staleIds[i.id]) st.stale[t] = true;
-      });
-      st.staleIds = {};
-      save();
-    }
 
     buildPanel();
 
@@ -364,7 +328,6 @@
       '<div class="cwb-mt-body">' +
       '  <div class="cwb-mt-recipe" data-role="recipe"></div>' +
       '  <div class="cwb-mt-row cwb-mt-hint">Alt+клик — в рецепт / из рецепта</div>' +
-      '  <div class="cwb-mt-row cwb-mt-hint">Ctrl(⌘)+клик — крестик на виде предмета</div>' +
       '  <div class="cwb-mt-row cwb-mt-hint">Shift+клик — на чердак / обратно</div>' +
       '  <div class="cwb-mt-row">' +
       '    <label class="cwb-mt-lbl">Сортировка</label>' +
@@ -376,7 +339,6 @@
       '  </div>' +
       '  <div class="cwb-mt-row cwb-mt-btnrow">' +
       '    <button type="button" class="cwb-mt-btn" data-act="clear-recipe">Очистить рецепт</button>' +
-      '    <button type="button" class="cwb-mt-btn" data-act="clear-stale">Снять крестики</button>' +
       '    <button type="button" class="cwb-mt-btn" data-act="clear-attic">Разобрать чердак</button>' +
       '  </div>' +
       '</div>';
@@ -417,10 +379,6 @@
         save();
       } else if (act === 'clear-recipe') {
         st.recipe = [];
-        save();
-        mark();
-      } else if (act === 'clear-stale') {
-        st.stale = {};
         save();
         mark();
       } else if (act === 'clear-attic') {

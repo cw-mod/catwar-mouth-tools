@@ -1,4 +1,4 @@
-# CatWar: mouth tools — сортировка во рту, рецепт, крестики
+# CatWar: mouth tools — сортировка во рту, рецепт, чердак
 
 Userscript for `/cw3` (catwar.su / catwar.net):
 
@@ -13,15 +13,10 @@ Userscript for `/cw3` (catwar.su / catwar.net):
    the recipe is a row of game-sized icons (one of each kind, no counters) —
    missing kinds are dimmed, present ones get a green outline, and the whole
    panel glows green when the recipe can be assembled from the mouth.
-3. **Stale crosses** — `Ctrl`/`⌘`+click draws a big red SVG cross over **all
-  items of that kind** in the mouth (per type) plus a light red tint;
-  states are mutually exclusive: a kind is either crossed out, or in the
-  recipe, or unmarked. Overlay via `data-cwb-*` + CSS pseudo-element
-  (survives Vue re-renders).
-4. **«Attic» (чердак)** — `Shift`+click moves an item kind to a separate
-  last row of the mouth (dimmed, greyed out) to keep unneeded items out of
-  the way; `Shift`+click again moves it back. Panel button «Разобрать
-  чердак» returns everything.
+3. **«Attic» (чердак)** — `Shift`+click moves an item kind to a **separate
+  row** of the mouth (dimmed, greyed out, always last) to keep unneeded
+  items out of the way; `Shift`+click again moves it back. Panel button
+  «Разобрать чердак» returns everything at once.
 
 Everything is client-side (no socket emits), state in `localStorage`
 key `cwb_mouth_tools`. Plain clicks keep the vanilla game item menu.
@@ -38,9 +33,11 @@ https://cw-mod.github.io/catwar-mouth-tools/
 
 ## Notes
 
-- Crosses are per item **type** (`Ctrl`+click any instance → the whole kind
-  is crossed). Panel button «Снять крестики» clears all. Crossed kinds
-  don't count toward recipe progress and are excluded from recipe sorting.
+- Attic marks are per item **type** (`Shift`+click any instance → the whole
+  kind goes to the attic row). Panel button «Разобрать чердак» clears all.
+  Reordering is done via reactive `splice` (Vue 2 doesn't see direct index
+  assignment — that was the «sort sometimes doesn't re-apply» bug, fixed in
+  v1.7.0).
 - Verified against the Oct 19 2026 bundle: mouth state is `vm.item.list`
   (`{id, type, isLocked, expiresAt…}`), server re-sorts by
   `["lastPick","id"]` inside `thing add` only. See
