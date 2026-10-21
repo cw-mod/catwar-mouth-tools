@@ -1,53 +1,46 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CatWar: инструменты для рта</title>
-  <style>
-    :root { color-scheme: dark; }
-    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      padding: 24px; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: #f3e4c8; background: #1c140c; }
-    main { max-width: 40rem; }
-    h1 { margin: 0 0 12px; font-size: 1.6rem; line-height: 1.25; }
-    h2 { margin: 28px 0 10px; font-size: 1.15rem; }
-    p { margin: 0 0 12px; }
-    .downloads { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 8px; }
-    .download { display: inline-block; padding: 12px 18px; font-weight: 700; color: #1c140c;
-      text-decoration: none; background: #f3e4c8; border-radius: 8px; }
-    .download:hover { background: #fff; }
-    .note { font-size: 0.92rem; opacity: 0.88; }
-    ol, ul { margin: 0 0 12px; padding-left: 1.2em; }
-    li { margin-bottom: 6px; }
-    code, kbd { font-size: 0.9em; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CatWar: инструменты для рта</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    margin: 0;
+    background: #1a1a1a;
+    color: #d9d9d9;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+  }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: lowercase; color: #999; margin-bottom: 12px; }
+  h1 { font-size: 24px; margin: 0 0 14px; color: #fff; font-weight: bold; }
+  .lead { font-size: 13px; line-height: 1.7; color: #b3b3b3; margin: 0 0 26px; max-width: 520px; }
+  .btn {
+    display: inline-block; padding: 12px 26px; border-radius: 10px;
+    background: #e8e8e8; color: #1a1a1a; font-weight: bold; font-size: 14px;
+    text-decoration: none; font-family: inherit;
+  }
+  .btn:hover { background: #fff; }
+  .foot { font-size: 11px; color: #777; margin-top: 26px; line-height: 1.7; }
+  .foot a { color: #999; }
+</style>
 </head>
 <body>
-  <main>
-    <h1>CatWar: инструменты для рта</h1>
-    <p>Набор инструментов для предметов во рту на <strong>catwar.su</strong> и <strong>catwar.net</strong>: чердак, закрепление типов, сортировка и быстрое выделение для смешивания — без отдельных окон.</p>
-    <p class="downloads">
-      <a class="download" href="./mouth-tools.user.js">Скачать юзерскрипт</a>
-    </p>
-    <p class="note">Версия 2.0.0 (бывший «Рецепт»: окно рецепта убрано, функции смешивания влиты из мода mix-select). Юзерскрипт для Tampermonkey. Автообновление: <a href="./mouth-tools.meta.js">mouth-tools.meta.js</a>.</p>
-
-    <h2>Установка</h2>
-    <ol>
-      <li>Установите <a href="https://www.tampermonkey.net/" rel="noopener">Tampermonkey</a>.</li>
-      <li>Нажмите «Скачать юзерскрипт» — Tampermonkey предложит установку.</li>
-      <li>Откройте игровую <code>https://catwar.su/cw3</code> или <code>https://catwar.net/cw3</code>.</li>
-      <li>Если стоял отдельный мод «быстрое выделение для смешивания» (mix-select) — удалите его, теперь всё здесь.</li>
-    </ol>
-
-    <h2>Что умеет</h2>
-    <ul>
-      <li><strong>Чердак</strong> — ненужные типы предметов отдельным сворачиваемым блоком вверху рта (<kbd>Shift</kbd>+клик по предмету — на чердак / обратно).</li>
-      <li><strong>Закрепление 🔒</strong> — закреплённый тип не выделяется «быстрым выделением» и «Выбрать всё» и не попадает в смешивание случайно (<kbd>Alt</kbd>+клик по предмету — закрепить/открепить).</li>
-      <li><strong>Сортировка</strong> — «как у игры / по типу» селектом прямо в блоке рта.</li>
-      <li><strong>Быстрое выделение</strong> — <kbd>Ctrl</kbd>+клик (<kbd>⌘</kbd> на Mac) по предмету выделяет весь тип; работает и в режиме смешивания.</li>
-      <li><strong>Кнопки смешивания</strong> — прилипающая панель у списка рта: «✚ Всё» (выделить всё для смешивания), «→ В смешение» (войти в режим, сохранив выделение), «✖ Снять».</li>
-    </ul>
-    <p class="note">Само смешивание скрипт не подтверждает — после выделения вы сами нажимаете игровую кнопку «Смешать».</p>
-  </main>
+<div>
+  <div class="eyebrow">userscript</div>
+  <h1>инструменты для рта</h1>
+  <p class="lead">чердак с закреплением типов 🔒, сортировка, «выбрать всё» и «снять» — одной строкой в блоке рта. ctrl+клик — выделить весь тип, shift+клик — на чердак, alt+клик — закрепить. в режим смешивания входите игровой кнопкой, быстрое выделение работает и в нём</p>
+  <a class="btn" href="mouth-tools.user.js">установить</a>
+  <p class="foot">
+    версия 2.1.0 · автообновление: <a href="mouth-tools.meta.js">meta</a><br>
+    если стоял отдельный мод mix-select — удалите его, теперь всё здесь
+  </p>
+</div>
 </body>
 </html>

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         CatWar: инструменты для рта
 // @namespace    catwar-mouth-tools
-// @version      2.0.0
-// @description  Чердак с закреплением типов (🔒 — защита от случайного смешивания), сортировка прямо в блоке рта, быстрое выделение типов и кнопки смешивания — без отдельных окон.
+// @version      2.1.0
+// @description  Чердак с закреплением типов (🔒 — защита от случайного смешивания), сортировка, быстрое выделение и «Выбрать всё»/«Снять» — одной панелью в блоке рта, без отдельных окон.
 // @author       local
 // @match        https://catwar.su/cw3
 // @match        https://catwar.su/cw3/
@@ -29,13 +29,16 @@
  *     плавающее окно и «рецепт» убраны (v2.0.0);
  *   - быстрое выделение: Ctrl+клик (⌘ на Mac) — «галка» на весь тип,
  *     работает и в режиме смешивания;
- *   - кнопки смешивания (✚ Всё / → В смешение / ✖ Снять) — прилипающая
- *     панель у списка рта, влившись из отдельного мода mix-select.
+ *   - «✚ Выбрать всё» и «✖ Снять» — в той же строке, где чердак и
+ *     сортировка; в режим смешивания игрок входит сам игровой кнопкой.
  *
  * Игра: выделение — Vue-флаг isActive, «Смешать» зовёт нативный confirm().
  * Всё выделение идёт через игровые методы (showActions/hideActions).
  * Миграция с v1.x: recipe/pos/size/collapsed больше не читаются,
  * sortMode 'recipe' → 'game', чердак и свёрнутость сохраняются.
+ * v2.1.0: прилипающая панель смешивания убрана — «Выбрать всё»/«Снять»
+ * переехали в строку инструментов рта, «→ В смешение» удалён (вход в
+ * режим смешивания — игровой кнопкой «Смешивать»).
  */
 
 /* eslint-disable no-var */
@@ -90,12 +93,7 @@
     '.cwb-mt-sort { font: inherit; color: inherit; padding: 1px 4px;',
     '  background: rgba(25,25,28,.7); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; }',
     '.cwb-mt-pins { opacity: .85; cursor: help; }',
-    '.cwb-mt-hint { font-size: 10px; opacity: .55; }',
-
-    // прилипающая панель смешивания (в body, НЕ внутри Vue-контейнеров)
-    '#cwb-mt-mixbar { display: flex; gap: 4px; align-items: center; padding: 2px;',
-    '  background: rgba(28,20,12,.92); border: 1px solid rgba(243,228,200,.25); border-radius: 8px; }',
-    '#cwb-mt-mixbar button { cursor: pointer; }'
+    '.cwb-mt-hint { font-size: 10px; opacity: .55; }'
   ].join('\n'));
 
   function css(rule) {
@@ -241,6 +239,8 @@
         '  <option value="game">как у игры</option>' +
         '  <option value="type">по типу</option>' +
         '</select>' +
+        '<button type="button" class="cwb-mt-chip" data-role="select-all" title="Выделить все предметы (в режиме смешивания — кроме 🔒 и заблокированных)">✚ Выбрать всё</button>' +
+        '<button type="button" class="cwb-mt-chip" data-role="clear-sel" title="Снять выделение со всех предметов">✖ Снять</button>' +
         '<span class="cwb-mt-pins" title="закреплённые типы (Alt+клик по предмету — закрепить/открепить)"></span>' +
         '<span class="cwb-mt-hint">Ctrl+клик (⌘) — весь тип · Shift+клик — чердак · Alt+клик — 🔒 закрепить</span>';
       bar.querySelector('#cwb-mt-attic-toggle').addEventListener('click', function () {
@@ -254,6 +254,8 @@
         if (st.sortMode === 'game') vm.$nextTick(mark); // просто перерисовать метки
         else applySort();
       });
+      bar.querySelector('[data-role="select-all"]').addEventListener('click', selectAllAction);
+      bar.querySelector('[data-role="clear-sel"]').addEventListener('click', clearSelection);
       container.parentNode.insertBefore(bar, container);
     }
 
@@ -347,35 +349,23 @@
     });
   }
 
-  function ensureMixMode() {
-    if (vm.item.mixMode) return;
-    try { vm.item.enableMixMode(); }
-    catch (e) { vm.item.mixMode = true; } // запасной путь, если метод переименуют
-  }
   function markActive(it) {
     try { vm.item.showActions(it, true); }
     catch (e) { it.isActive = true; } // запасной путь
   }
 
-  // «✚ Всё»: войти в режим смешивания и выделить всё (кроме 🔒 и заблокированных)
-  function mixAll() {
+  // «✚ Выбрать всё»: вне режима смешивания — обычный мультивыбор
+  // (пропатченный selectAll игры: без чердака и 🔒); в режиме смешивания —
+  // выделить для смешивания всё, кроме 🔒 и заблокированных.
+  function selectAllAction() {
     if (!vm || !vm.item) return;
-    ensureMixMode();
-    vm.item.list.forEach(function (it) {
-      if (mixable(it) && !it.isActive) markActive(it);
-    });
-  }
-
-  // «→ В смешение»: войти в режим смешивания, СОХРАНИВ текущее выделение
-  // (игра при входе в режим его сбрасывает — мы возвращаем)
-  function mixSelected() {
-    if (!vm || !vm.item || vm.item.mixMode) return;
-    var ids = vm.item.list.filter(function (i) { return i.isActive; })
-      .map(function (i) { return i.id; });
-    ensureMixMode();
-    vm.item.list.forEach(function (it) {
-      if (!it.isActive && ids.indexOf(it.id) !== -1) markActive(it);
-    });
+    if (vm.item.mixMode) {
+      vm.item.list.forEach(function (it) {
+        if (mixable(it) && !it.isActive) markActive(it);
+      });
+    } else {
+      vm.item.selectAll(); // пропатчен: пропускает чердак и 🔒
+    }
   }
 
   function clearSelection() {
@@ -405,64 +395,6 @@
     vm.item.selectAll = wrapped;
   }
 
-  // --------------------------------------------------------------- mix bar
-  // Прилипающая панель у списка рта (в body — НЕ внутри Vue-контейнеров):
-  // [✚ Всё] [→ В смешение] [✖ Снять]. Позиция ограничена вьюпортом.
-
-  function buildMixBtn(text, title, fn) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'ui-btn ui-btn--tiny'; // игровой класс кнопок — родной вид
-    b.textContent = text;
-    b.title = title;
-    b.addEventListener('click', fn);
-    return b;
-  }
-
-  function mountMixBar() {
-    var bar = document.getElementById('cwb-mt-mixbar');
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.id = 'cwb-mt-mixbar';
-      bar.style.position = 'fixed';
-      bar.style.zIndex = '99999';
-      bar.appendChild(buildMixBtn('✚ Всё',
-        'Войти в режим смешивания и выделить все предметы (кроме 🔒 и заблокированных)',
-        mixAll));
-      bar.appendChild(buildMixBtn('→ В смешение',
-        'Войти в режим смешивания, сохранив текущее выделение (например, после Ctrl+кликов)',
-        mixSelected));
-      bar.appendChild(buildMixBtn('✖ Снять',
-        'Снять выделение со всех предметов',
-        clearSelection));
-      document.body.appendChild(bar);
-    } else if (!bar.isConnected) {
-      document.body.appendChild(bar);
-    }
-    positionMixBar(bar);
-  }
-
-  function positionMixBar(bar) {
-    var td = document.querySelector('#tr_mouth > td');
-    if (!td || !td.isConnected) { bar.style.visibility = 'hidden'; return; }
-    var r = td.getBoundingClientRect();
-    var vh = window.innerHeight;
-    // панель рта не на экране (выше/ниже вьюпорта) — прячем панель смешивания
-    if (r.width === 0 || r.bottom <= 0 || r.top >= vh) {
-      bar.style.visibility = 'hidden';
-      return;
-    }
-    var barH = bar.offsetHeight || 33;
-    var top = r.bottom + 4;                 // желаем: сразу под панелью рта
-    var maxTop = vh - barH - 8;             // но не ниже низа экрана
-    var minTop = Math.max(r.top + 4, 8);    // и не выше начала панели рта
-    if (top > maxTop) top = Math.max(maxTop, minTop);
-    if (top < minTop) top = minTop;
-    bar.style.left = Math.round(r.left) + 'px';
-    bar.style.top = Math.round(top) + 'px';
-    bar.style.visibility = 'visible';
-  }
-
   // --------------------------------------------------------------- init
 
   function init(vue) {
@@ -473,17 +405,5 @@
     // реактивность: подписка на состав списка (id по порядку)
     vm.$watch(function () { return vm.item.list.map(function (i) { return i.id; }).join(','); },
       onListChange, { immediate: true });
-
-    // панель смешивания: трекинг позиции (компакт/нюх/ре-рендеры) + скролл/ресайз
-    mountMixBar();
-    setInterval(mountMixBar, 1000);
-    window.addEventListener('scroll', function () {
-      var bar = document.getElementById('cwb-mt-mixbar');
-      if (bar) positionMixBar(bar);
-    }, true); // capture: скроллится не window, а внутренние блоки
-    window.addEventListener('resize', function () {
-      var bar = document.getElementById('cwb-mt-mixbar');
-      if (bar) positionMixBar(bar);
-    });
   }
 })();
