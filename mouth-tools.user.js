@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         CatWar: инструменты для рта
 // @namespace    catwar-mouth-tools
-// @version      2.1.1
-// @description  Чердак с закреплением типов (🔒 — защита от случайного смешивания), сортировка, быстрое выделение и «Выбрать всё»/«Снять» — строкой под чердаком и сортировкой в блоке рта, без отдельных окон.
+// @version      2.2.0
+// @description  Чердак для ненужных предметов, сортировка, быстрое выделение и «Выбрать всё»/«Снять» — строкой под чердаком и сортировкой в блоке рта, без отдельных окон.
 // @author       local
 // @match        https://catwar.su/cw3
 // @match        https://catwar.su/cw3/
@@ -22,9 +22,6 @@
  * Инструменты для рта (бывший «Рецепт»):
  *   - чердак: ненужные типы — отдельным сворачиваемым блоком вверху рта
  *     (Shift+клик по предмету — на чердак / обратно);
- *   - закрепление 🔒: закреплённый тип не выделяется «Быстрым выделением»
- *     (Ctrl+клик), «Выбрать всё» и кнопками смешивания — не смешать случайно
- *     (Alt+клик по предмету — закрепить/открепить тип);
  *   - сортировка «как у игры / по типу» — селект прямо в блоке рта,
  *     плавающее окно и «рецепт» убраны (v2.0.0);
  *   - быстрое выделение: Ctrl+клик (⌘ на Mac) — «галка» на весь тип,
@@ -39,13 +36,15 @@
  * v2.1.0: прилипающая панель смешивания убрана — «Выбрать всё»/«Снять»
  * переехали в строку инструментов рта, «→ В смешение» удалён (вход в
  * режим смешивания — игровой кнопкой «Смешивать»).
+ * v2.2.0: кастомное закрепление типов 🔒 (Alt+клик) убрано — у игры
+ * есть собственное закрепление предметов в меню предмета.
  */
 
 /* eslint-disable no-var */
 (function () {
   'use strict';
 
-  var LS_KEY = 'cwb_mouth_tools'; // единый JSON: чердак, закрепы, сортировка
+  var LS_KEY = 'cwb_mouth_tools'; // единый JSON: чердак и сортировка
   var PREFIX = 'data-';           // атрибуты data-cwb-* на чужих (Vue) элементах — переживают ре-рендер
 
   // --------------------------------------------------------------- state
@@ -57,11 +56,10 @@
       return {
         atticFolded: !!parsed.atticFolded,                 // чердак свёрнут
         sortMode: parsed.sortMode === 'type' ? 'type' : 'game', // game | type ('recipe' и мусор → game)
-        attic: parsed.attic || {},                         // {type: true} — чердак
-        pins: parsed.pins || {}                            // {type: true} — 🔒 закреплённые
+        attic: parsed.attic || {}                          // {type: true} — чердак
       };
     } catch (e) {
-      return { atticFolded: false, sortMode: 'game', attic: {}, pins: {} };
+      return { atticFolded: false, sortMode: 'game', attic: {} };
     }
   }
   function save() {
@@ -77,11 +75,6 @@
     '#itemList .itemInMouth[data-cwb-main-first] { grid-column-start: 1; margin-top: 8px; }',
     '#itemList.cwb-attic-folded .itemInMouth[data-cwb-attic] { display: none; }',
 
-    // 🔒 закреплённый тип: значок-замок в углу предмета
-    '#itemList .itemInMouth[data-cwb-pinned] { position: relative; }',
-    '#itemList .itemInMouth[data-cwb-pinned]::after { content: "\\1F512"; position: absolute;',
-    '  right: 0; bottom: 0; font-size: 9px; line-height: 1; pointer-events: none; }',
-
     // панель инструментов рта (вставляется перед #itemList, внутри блока рта)
     '#cwb-mt-controls { display: flex; flex-direction: column; gap: 3px;',
     '  margin: 2px 0 4px; font: 11px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;',
@@ -93,7 +86,6 @@
     '.cwb-mt-lbl { opacity: .75; }',
     '.cwb-mt-sort { font: inherit; color: inherit; padding: 1px 4px;',
     '  background: rgba(25,25,28,.7); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; }',
-    '.cwb-mt-pins { opacity: .85; cursor: help; }',
     '.cwb-mt-hint { font-size: 10px; opacity: .55; }'
   ].join('\n'));
 
@@ -189,7 +181,6 @@
 
     var firstMain = null;
     var atticCount = 0;
-    var pinnedTypes = {}; // типы с 🔒, чьи предметы сейчас во рту
     container.querySelectorAll('.itemInMouth').forEach(function (el) {
       var t = typeById[el.id];
       if (t == null) {
@@ -198,12 +189,9 @@
         t = m ? m[1] : null;
       }
       setAttr(el, 'cwb-type', t != null ? t : null);
-      // чердак и закрепление — на всём типе предмета
+      // чердак — на всём типе предмета
       var isAttic = t != null && !!st.attic[t];
       setAttr(el, 'cwb-attic', isAttic ? '1' : null);
-      var isPinned = t != null && !!st.pins[t];
-      setAttr(el, 'cwb-pinned', isPinned ? '1' : null);
-      if (isPinned) pinnedTypes[t] = true;
       setAttr(el, 'cwb-attic-first', null); // легаси v1.5–1.7
       setAttr(el, 'cwb-main-first', null);
       if (isAttic) atticCount++;
@@ -215,7 +203,7 @@
     // свёрнутость чердака (CSS прячет .itemInMouth[data-cwb-attic])
     container.classList.toggle('cwb-attic-folded', !!st.atticFolded);
 
-    syncControls(container, atticCount, Object.keys(pinnedTypes).length);
+    syncControls(container, atticCount);
   }
   function setAttr(el, name, val) {
     if (val != null) el.setAttribute(PREFIX + name, val);
@@ -224,10 +212,10 @@
     el.removeAttribute('data-cwb-' + name);
   }
 
-  // панель инструментов рта: [Чердак ×N ▾] [Сортировка ▾] [🔒 ×M] + подсказка.
+  // панель инструментов рта: [Чердак ×N ▾] [Сортировка ▾] + подсказка.
   // mark() вызывается после каждого изменения списка — если игра прибрала
   // наш вставной элемент при перерендере родителя, он создаётся заново.
-  function syncControls(container, atticCount, pinnedCount) {
+  function syncControls(container, atticCount) {
     var bar = document.getElementById('cwb-mt-controls');
     if (!bar) {
       if (!container.parentNode) return;
@@ -241,11 +229,10 @@
         '  <option value="game">как у игры</option>' +
         '  <option value="type">по типу</option>' +
         '</select>' +
-        '<span class="cwb-mt-pins" title="закреплённые типы (Alt+клик по предмету — закрепить/открепить)"></span>' +
-        '<span class="cwb-mt-hint">Ctrl+клик (⌘) — весь тип · Shift+клик — чердак · Alt+клик — 🔒 закрепить</span>' +
+        '<span class="cwb-mt-hint">Ctrl+клик (⌘) — весь тип · Shift+клик — чердак</span>' +
         '</div>' +
         '<div class="cwb-mt-row">' +
-        '<button type="button" class="cwb-mt-chip" data-role="select-all" title="Выделить все предметы (в режиме смешивания — кроме 🔒 и заблокированных)">✚ Выбрать всё</button>' +
+        '<button type="button" class="cwb-mt-chip" data-role="select-all" title="Выделить все предметы (в режиме смешивания — кроме закреплённых игрой)">✚ Выбрать всё</button>' +
         '<button type="button" class="cwb-mt-chip" data-role="clear-sel" title="Снять выделение со всех предметов">✖ Снять</button>' +
         '</div>';
       bar.querySelector('#cwb-mt-attic-toggle').addEventListener('click', function () {
@@ -268,17 +255,11 @@
     att.style.display = atticCount ? '' : 'none';
     att.textContent = 'Чердак ×' + atticCount + (st.atticFolded ? ' ▸' : ' ▾');
 
-    var pins = bar.querySelector('.cwb-mt-pins');
-    pins.style.display = pinnedCount ? '' : 'none';
-    pins.textContent = '🔒 ×' + pinnedCount;
-
     var sel = bar.querySelector('[data-role="sortmode"]');
     if (sel.value !== st.sortMode) sel.value = st.sortMode;
   }
 
-  // --------------------------------------------------------------- attic & pins
-
-  function isPinned(type) { return type != null && !!st.pins[type]; }
+  // --------------------------------------------------------------- attic
 
   function toggleAttic(type) {
     if (st.attic[type]) delete st.attic[type];
@@ -287,20 +268,12 @@
     applySort(); // чердачные предметы всегда поднимаются наверх — обновляем порядок
   }
 
-  function togglePin(type) {
-    if (st.pins[type]) delete st.pins[type];
-    else st.pins[type] = true;
-    save();
-    mark();
-  }
-
   // --------------------------------------------------------------- interactions
 
-  // модификаторы: Alt+клик — 🔒 закрепить/открепить тип (защита от
-  // случайного выделения/смешивания), Shift+клик — на чердак / обратно.
+  // Shift+клик — на чердак / обратно.
   // Обычный клик не трогаем: у игры свой @click="item.showActions(now)".
   document.addEventListener('click', function (e) {
-    if (!e.altKey && !e.shiftKey) return;
+    if (!e.shiftKey) return;
     var el = e.target && e.target.closest ? e.target.closest('#itemList .itemInMouth') : null;
     if (!el) return;
     e.preventDefault();
@@ -310,13 +283,12 @@
     if (type == null) type = itemTypeById(el.id);
     if (type == null) return;
 
-    if (e.altKey) togglePin(type);
-    else toggleAttic(type);
+    toggleAttic(type);
   }, true);
 
   // Ctrl+клик (Cmd на Mac) по предмету — «галка» на все предметы этого типа.
   // Использует игровой мультивыбор: vm.item.showActions(t, true) (как selectAll).
-  // Работает и в режиме смешивания; 🔒 закреплённые типы не трогает.
+  // Работает и в режиме смешивания; закреплённые игрой предметы не трогает.
   document.addEventListener('click', function (e) {
     if (!e.ctrlKey && !e.metaKey) return;
     if (e.shiftKey || e.altKey) return;
@@ -340,12 +312,11 @@
 
   // --------------------------------------------------------------- selection & mixing
 
-  // годен к быстрому выделению: не заблокирован игрой и не 🔒 закреплён
-  function mixable(it) { return it && !it.isLocked && !isPinned(itemType(it)); }
+  // годен к быстрому выделению: не закреплён игрой (её собственный 🔒 в меню предмета)
+  function mixable(it) { return it && !it.isLocked; }
 
   function selectType(type) {
     if (!vm || !vm.item) return;
-    if (isPinned(type)) return; // 🔒 закреплённые не выделяем случайно
     var of = vm.item.list.filter(function (i) { return itemType(i) === type && mixable(i); });
     if (!of.length) return;
     var anyOff = of.some(function (i) { return !i.isActive; }); // есть невыделенные?
@@ -360,8 +331,8 @@
   }
 
   // «✚ Выбрать всё»: вне режима смешивания — обычный мультивыбор
-  // (пропатченный selectAll игры: без чердака и 🔒); в режиме смешивания —
-  // выделить для смешивания всё, кроме 🔒 и заблокированных.
+  // (пропатченный selectAll игры: без чердака); в режиме смешивания —
+  // выделить для смешивания всё, кроме закреплённых игрой предметов.
   function selectAllAction() {
     if (!vm || !vm.item) return;
     if (vm.item.mixMode) {
@@ -369,7 +340,7 @@
         if (mixable(it) && !it.isActive) markActive(it);
       });
     } else {
-      vm.item.selectAll(); // пропатчен: пропускает чердак и 🔒
+      vm.item.selectAll(); // пропатчен: пропускает чердак
     }
   }
 
@@ -381,7 +352,7 @@
     }
   }
 
-  // «Выбрать всё» (#item_multi) — только предметы вне чердака и без 🔒.
+  // «Выбрать всё» (#item_multi) — только предметы вне чердака.
   // Игра: item.selectAll() идёт по list и для каждого невыбранного зовёт
   // showActions(t, true); в режиме смешивания у игры это no-op — сохраняем.
   function patchSelectAll() {
@@ -392,7 +363,7 @@
       vm.item.list.forEach(function (t) {
         if (t.isActive) return;
         var ty = itemType(t);
-        if (ty != null && (st.attic[ty] || st.pins[ty])) return; // чердак и 🔒 — не выбираем
+        if (ty != null && st.attic[ty]) return; // чердак — не выбираем
         vm.item.showActions(t, true);
       });
     };
