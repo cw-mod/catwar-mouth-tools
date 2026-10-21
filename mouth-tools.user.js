@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         CatWar: инструменты для рта
 // @namespace    catwar-mouth-tools
-// @version      2.1.0
-// @description  Чердак с закреплением типов (🔒 — защита от случайного смешивания), сортировка, быстрое выделение и «Выбрать всё»/«Снять» — одной панелью в блоке рта, без отдельных окон.
+// @version      2.1.1
+// @description  Чердак с закреплением типов (🔒 — защита от случайного смешивания), сортировка, быстрое выделение и «Выбрать всё»/«Снять» — строкой под чердаком и сортировкой в блоке рта, без отдельных окон.
 // @author       local
 // @match        https://catwar.su/cw3
 // @match        https://catwar.su/cw3/
@@ -29,8 +29,8 @@
  *     плавающее окно и «рецепт» убраны (v2.0.0);
  *   - быстрое выделение: Ctrl+клик (⌘ на Mac) — «галка» на весь тип,
  *     работает и в режиме смешивания;
- *   - «✚ Выбрать всё» и «✖ Снять» — в той же строке, где чердак и
- *     сортировка; в режим смешивания игрок входит сам игровой кнопкой.
+ *   - «✚ Выбрать всё» и «✖ Снять» — строкой ниже чердака и
+ *     сортировки; в режим смешивания игрок входит сам игровой кнопкой.
  *
  * Игра: выделение — Vue-флаг isActive, «Смешать» зовёт нативный confirm().
  * Всё выделение идёт через игровые методы (showActions/hideActions).
@@ -83,9 +83,10 @@
     '  right: 0; bottom: 0; font-size: 9px; line-height: 1; pointer-events: none; }',
 
     // панель инструментов рта (вставляется перед #itemList, внутри блока рта)
-    '#cwb-mt-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;',
+    '#cwb-mt-controls { display: flex; flex-direction: column; gap: 3px;',
     '  margin: 2px 0 4px; font: 11px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;',
     '  color: #f2f2f2; user-select: none; }',
+    '.cwb-mt-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }',
     '.cwb-mt-chip { cursor: pointer; font: inherit; color: inherit; padding: 1px 8px;',
     '  background: rgba(25,25,28,.7); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; }',
     '.cwb-mt-chip:hover { background: rgba(25,25,28,.9); }',
@@ -233,16 +234,20 @@
       bar = document.createElement('div');
       bar.id = 'cwb-mt-controls';
       bar.innerHTML =
+        '<div class="cwb-mt-row">' +
         '<button type="button" id="cwb-mt-attic-toggle" class="cwb-mt-chip" title="свернуть/развернуть чердак"></button>' +
         '<span class="cwb-mt-lbl">Сортировка</span>' +
         '<select class="cwb-mt-sort" data-role="sortmode" title="порядок предметов во рту">' +
         '  <option value="game">как у игры</option>' +
         '  <option value="type">по типу</option>' +
         '</select>' +
+        '<span class="cwb-mt-pins" title="закреплённые типы (Alt+клик по предмету — закрепить/открепить)"></span>' +
+        '<span class="cwb-mt-hint">Ctrl+клик (⌘) — весь тип · Shift+клик — чердак · Alt+клик — 🔒 закрепить</span>' +
+        '</div>' +
+        '<div class="cwb-mt-row">' +
         '<button type="button" class="cwb-mt-chip" data-role="select-all" title="Выделить все предметы (в режиме смешивания — кроме 🔒 и заблокированных)">✚ Выбрать всё</button>' +
         '<button type="button" class="cwb-mt-chip" data-role="clear-sel" title="Снять выделение со всех предметов">✖ Снять</button>' +
-        '<span class="cwb-mt-pins" title="закреплённые типы (Alt+клик по предмету — закрепить/открепить)"></span>' +
-        '<span class="cwb-mt-hint">Ctrl+клик (⌘) — весь тип · Shift+клик — чердак · Alt+клик — 🔒 закрепить</span>';
+        '</div>';
       bar.querySelector('#cwb-mt-attic-toggle').addEventListener('click', function () {
         st.atticFolded = !st.atticFolded;
         save();
